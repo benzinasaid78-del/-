@@ -1,0 +1,734 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#14202b">
+<meta name="application-name" content="Etiquetas Locutorio">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Etiquetas">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Etiquetas Locutorio</title>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: lookup panel, editable product list (saved in db), then A4 sheet(s) of 60x38mm labels with dashed cut lines */
+:root {
+  --bg: #eef1f5; --panel: #ffffff; --fg: #17212b; --muted: #5b6877; --line: #d9e0e8;
+  --accent: #0f4c75; --accent-fg: #ffffff; --tag: #ffd23f; --tag-fg: #17212b;
+  --warn: #a8401d; --warn-bg: #fbe9e1; --ok: #12714f;
+  --paper: #ffffff; --ink: #111111; --cut: #8a8a8a;
+  --font-ui: "Lora", Georgia, "Times New Roman", serif;
+  --font-name: "Lora", Georgia, "Times New Roman", serif;
+  --font-price: "Lora", Georgia, "Times New Roman", serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e141b; --panel: #17202a; --fg: #e7edf3; --muted: #93a1b0; --line: #28343f;
+    --accent: #6cb6e6; --accent-fg: #08121a; --warn: #f0a07f; --warn-bg: #3a2620; --ok: #5cc9a0; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e141b; --panel: #17202a; --fg: #e7edf3; --muted: #93a1b0; --line: #28343f;
+  --accent: #6cb6e6; --accent-fg: #08121a; --warn: #f0a07f; --warn-bg: #3a2620; --ok: #5cc9a0; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-ui);
+  font-size: 15px; line-height: 1.6; margin: 0; padding-bottom: 48px;
+  padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px);
+}
+.topbar { background: #14202b; color: #fff; border-bottom: 4px solid var(--tag); padding: 18px 16px 16px; padding-top: max(18px, env(safe-area-inset-top, 0px)); }
+.topbar-in { max-width: 860px; margin: 0 auto; display: flex; align-items: center; gap: 14px; }
+.logo { flex: none; width: 46px; height: 46px; border-radius: 10px; background: var(--tag); color: #14202b; display: grid; place-items: center; font: 700 26px var(--font-price); }
+.topbar h1 { margin: 0; font: 700 24px/1.1 var(--font-name); letter-spacing: .02em; }
+.topbar p { margin: 2px 0 0; color: #b4c0cc; font-size: 13px; }
+main { max-width: 860px; margin: 0 auto; padding: 18px 16px 0; }
+.panel {
+  max-width: 860px; margin: 0 auto 16px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 12px; padding: 18px;
+  display: grid; gap: 12px; min-width: 0; box-shadow: 0 1px 2px rgba(20,32,43,.06);
+}
+.panel h2 { margin: 0; font-size: 17px; font-weight: 600; text-wrap: balance; }
+.panel p { margin: 0; color: var(--muted); font-size: 14px; max-width: 70ch; }
+#setup { border-color: var(--warn); } #seedpanel, #pinpanel { border-inline-start: 4px solid var(--accent); }
+label { font-weight: 600; font-size: 14px; }
+input[type="text"] {
+  width: 100%; direction: ltr; text-align: left; color: var(--fg); background: var(--bg);
+  border: 1.5px solid var(--line); border-radius: 8px; padding: 10px 12px; font: 600 17px var(--font-name);
+}
+#q { font-size: 22px; padding: 13px 14px; background: var(--panel); border-color: var(--fg); }
+input:focus-visible, button:focus-visible, .btn:focus-within, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.count { color: var(--muted); font-size: 14px; }
+.count b { color: var(--fg); font-weight: 600; }
+button, .btn { font: 600 14px var(--font-ui); background: var(--accent); color: var(--accent-fg); border: 0; border-radius: 8px; padding: 10px 18px; cursor: pointer; display: inline-block; transition: filter .15s; }
+button:hover, .btn:hover { filter: brightness(1.12); }
+button.ghost { background: transparent; color: var(--fg); border: 1.5px solid var(--line); }
+button.danger { background: var(--warn-bg); color: var(--warn); }
+.btn input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+.result { border: 2px solid var(--fg); border-radius: 12px; padding: 0; display: grid; gap: 0; direction: ltr; text-align: left; background: var(--panel); overflow: hidden; }
+.result .r-name { background: var(--fg); color: var(--panel); padding: 10px 16px; font: 600 22px/1.15 var(--font-name); text-transform: uppercase; letter-spacing: .03em; text-wrap: balance; }
+.result .r-price { background: var(--tag); color: var(--tag-fg); padding: 10px 16px 6px; font: 700 72px/1 var(--font-price); font-variant-numeric: tabular-nums; }
+.result .r-price i { font-style: normal; font-weight: 700; font-size: 34px; margin-left: 6px; }
+.result .r-code { padding: 8px 16px 0; font: 500 14px var(--font-ui); color: var(--muted); letter-spacing: .08em; }
+.result .r-ar { padding: 0 16px 10px; color: var(--muted); }
+.result .r-code:last-child { padding-bottom: 10px; }
+.result.miss, .result.idle { direction: ltr; text-align: left; font-weight: 600; color: var(--warn); border: 2px dashed var(--line); padding: 18px 16px; background: transparent; }
+.result.idle { color: var(--muted); font-weight: 400; }
+
+.tools { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.tools label { display: inline-flex; gap: 8px; align-items: center; font-weight: 400; }
+.status { color: var(--ok); font-size: 13px; min-height: 1.4em; font-weight: 600; }
+.status.err { color: var(--warn); }
+
+.list { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.item { padding: 12px 14px; display: grid; gap: 8px; background: var(--panel); min-width: 0; border-bottom: 1px solid var(--line); border-inline-start: 4px solid transparent; }
+.item:last-child { border-bottom: 0; }
+.item:not(.complete) { border-inline-start-color: var(--warn); background: color-mix(in srgb, var(--warn-bg) 35%, var(--panel)); }
+.item .in-name { background: transparent; border-color: transparent; padding: 6px 8px; margin-inline: -8px; text-transform: uppercase; }
+.item .in-name:hover { border-color: var(--line); }
+.item .in-name:focus { background: var(--bg); border-color: var(--accent); }
+.item-2 { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.pricebox { display: flex; align-items: center; gap: 6px; direction: ltr; }
+.pricebox input { width: 7.5em; font: 700 22px var(--font-price); text-align: center; padding: 6px 8px; background: var(--tag); color: var(--tag-fg); border-color: transparent; border-radius: 6px; }
+.pricebox span { font: 700 20px var(--font-price); }
+.meta { display: grid; gap: 0; min-width: 0; flex: 1 1 8em; }
+.meta .code { direction: ltr; text-align: left; font: 500 13px var(--font-ui); letter-spacing: .06em; color: var(--muted); }
+.pill { font-size: 12px; font-weight: 600; border-radius: 99px; padding: 1px 10px; background: var(--warn-bg); color: var(--warn); white-space: nowrap; }
+.pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.item .del { padding: 6px 12px; font-size: 13px; }
+.only-missing .item.complete { display: none; }
+.empty { color: var(--muted); text-align: center; padding: 22px 0; background: var(--panel); }
+
+details.add { border: 1.5px dashed var(--line); border-radius: 10px; padding: 12px 14px; }
+details.add summary { cursor: pointer; font-weight: 600; }
+.addgrid { display: grid; gap: 10px; margin-top: 12px; }
+.addgrid .pricebox input { width: 100%; }
+
+.stage { display: grid; gap: 20px; justify-items: center; margin-top: 20px; padding: 0 16px; }
+.fit { width: 100%; display: flex; justify-content: center; }
+
+
+#filter { background: var(--panel); }
+details.add summary { background: var(--accent); color: var(--accent-fg); border-radius: 8px; padding: 10px 16px; text-align: center; list-style: none; }
+details.add summary::-webkit-details-marker { display: none; }
+details.add[open] summary { margin-bottom: 2px; }
+details.add { border: 0; padding: 0; }
+body { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+.nav { position: fixed; inset: auto 0 0 0; z-index: 20; display: flex; background: var(--panel); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.nav a { flex: 1; display: grid; justify-items: center; gap: 2px; padding: 8px 4px 9px; color: var(--muted); text-decoration: none; font-size: 12px; font-weight: 600; border-top: 3px solid transparent; margin-top: -1px; }
+.nav svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.nav a.on { color: var(--accent); border-top-color: var(--tag); }
+.nav a:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+[data-view] { display: none; }
+body[data-tab="consulta"] [data-view="consulta"], body[data-tab="productos"] [data-view="productos"] { display: grid; }
+body[data-tab="etiquetas"] .panel[data-view="etiquetas"] { display: grid; }
+body[data-tab="etiquetas"] .stage[data-view="etiquetas"] { display: grid; }
+
+.ghostbtn { background: transparent; color: var(--fg); border: 1.5px solid var(--line); }
+#scanner { position: fixed; inset: 0; z-index: 50; background: #000; display: grid; place-items: center; }
+#scanner[hidden] { display: none; }
+#scanvideo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.scanframe { position: relative; width: min(86vw, 420px); aspect-ratio: 2 / 1; border: 3px solid var(--tag); border-radius: 14px; box-shadow: 0 0 0 100vmax rgba(0,0,0,.55); }
+#scanhint { position: absolute; left: 0; right: 0; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); margin: 0; text-align: center; color: #fff; font-weight: 600; text-shadow: 0 1px 4px #000; }
+#scanclose { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(32px + env(safe-area-inset-bottom, 0px)); background: var(--tag); color: #14202b; padding: 12px 28px; font-size: 16px; }
+/* ---- paper ---- */
+.sheet {
+  width: 210mm; height: 297mm; background: var(--paper); color: var(--ink);
+  padding: 8mm 15mm; display: grid;
+  grid-template-columns: repeat(3, 60mm); grid-template-rows: repeat(7, 38mm);
+  box-shadow: 0 2px 14px rgba(0,0,0,.18); flex: none; direction: ltr;
+}
+.tag {
+  border: 0.3mm dashed var(--cut); display: grid; overflow: hidden; padding: 1.4mm;
+}
+.tag-in {
+  border: 0.5mm solid var(--ink); border-radius: 1.8mm; display: grid;
+  grid-template-rows: 9mm minmax(0, 1fr) auto; overflow: hidden; min-height: 0;
+}
+.tag-name {
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  background: var(--ink); color: #fff; display: flex; align-items: center; padding: 0 2.2mm;
+  font-family: var(--font-name); font-weight: 600; font-size: 3.8mm; line-height: 1.1;
+  text-transform: uppercase; letter-spacing: .03em;
+}
+.tag-name span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tag-price {
+  font-family: var(--font-price); font-weight: 700; color: var(--ink);
+  display: flex; align-items: center; justify-content: center; gap: 1mm;
+  line-height: .9; white-space: nowrap; min-height: 0; overflow: hidden;
+}
+.tag-price b { font-weight: 700; font-size: 13mm; letter-spacing: -.01em; line-height: .9; }
+.tag-price i { font-style: normal; font-weight: 700; font-size: 7.5mm; line-height: 1; align-self: center; margin-top: -3mm; }
+.tag-foot {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 2mm;
+  padding: 1mm 2.2mm 1.1mm; border-top: 0.25mm solid var(--ink);
+}
+.tag-foot small { font-family: var(--font-name); font-size: 2.5mm; line-height: 1.15; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.bar { display: grid; justify-items: center; gap: .3mm; }
+.bar svg { height: 5.2mm; width: 28mm; display: block; }
+.bar span { font: 500 2.1mm/1 var(--font-ui); letter-spacing: .12em; }
+
+@page { size: A4; margin: 0; }
+@media print {
+  html, body { background: #fff !important; padding: 0 !important; }
+  .panel, .nav { display: none !important; }
+  body .stage[data-view] { display: block !important; }
+  .fit { display: block; }
+  .stage { gap: 0; display: block; margin: 0; }
+  .sheet { zoom: 1 !important; box-shadow: none; break-after: page; margin: 0; }
+  .sheet:last-child { break-after: auto; }
+}
+pre.code { margin: 0; padding: 10px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; font: 500 13px/1.5 var(--font-ui); }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body data-tab="consulta">
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="logo" aria-hidden="true">€</div>
+    <div>
+      <h1>Etiquetas Locutorio</h1>
+      <p>Consulta de precios e impresión de etiquetas</p>
+    </div>
+    <button type="button" id="installbtn" style="margin-inline-start:auto;background:var(--tag);color:#14202b">Instalar app</button>
+  </div>
+</header>
+<main>
+<div class="panel" id="ioshint" hidden><h2>Instalar la app</h2><p id="installtxt"></p></div>
+
+
+
+<div class="panel" id="setup" hidden>
+  <h2>No se puede conectar con la base de datos</h2>
+  <p>Comprueba que Realtime Database está activada en tu proyecto de Firebase y que las reglas permiten leer y escribir en la ruta <b dir="ltr">products</b>:</p>
+  <pre dir="ltr" class="code">{
+  "rules": {
+    "products": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}</pre>
+</div>
+
+<div class="panel" id="pinpanel" hidden>
+  <h2>Edición protegida con PIN</h2>
+  <p>La consulta de precios es abierta. Para editar productos e imprimir las hojas, introduce el PIN.</p>
+  <div class="row">
+    <input type="text" id="pin" inputmode="numeric" autocomplete="off" placeholder="••••" style="max-width:10em">
+    <button type="button" id="pinbtn">Entrar</button>
+  </div>
+  <div class="status err" id="pinerr"></div>
+</div>
+
+<div class="panel" id="seedpanel" hidden>
+  <h2>La base de datos está vacía</h2>
+  <p>Pulsa para cargar una sola vez los productos preparados (códigos de barras, nombres y precios ya anotados).</p>
+  <div class="row"><span class="count" id="seedcount"></span><button type="button" id="seedbtn">Cargar productos</button></div>
+</div>
+
+<div class="panel" data-view="consulta">
+  <h2>Consultar el precio de un producto</h2>
+  <label for="q">Código de barras o parte del nombre</label>
+  <input type="text" id="q" inputmode="text" autocomplete="off" placeholder="8436611270006">
+  <div class="row">
+    <button type="button" id="camopen">📷 Escanear código de barras</button>
+    <label class="btn ghostbtn" for="shot">Elegir una foto<input type="file" id="shot" accept="image/*"></label>
+    <span class="count" id="scanmsg"></span>
+  </div>
+  <div class="result idle" id="result">Escribe el código o el nombre, o escanea el código de barras.</div>
+</div>
+
+<div class="panel locked" id="editpanel" data-view="productos">
+  <h2>Productos y precios</h2>
+  <p>Escribe el nombre y el precio de cada producto; se guarda solo al pasar al campo siguiente. Los productos con nombre y precio aparecen en las hojas de etiquetas.</p>
+  <details class="add">
+    <summary>Añadir producto nuevo</summary>
+    <div class="addgrid">
+      <input type="text" id="addcode" inputmode="numeric" placeholder="Código de barras (números)">
+      <input type="text" id="addname" placeholder="Nombre del producto">
+      <div class="pricebox"><input type="text" id="addprice" inputmode="decimal" placeholder="0,00"><span>€</span></div>
+      <button type="button" id="addbtn">Añadir</button>
+    </div>
+  </details>
+  <input type="text" id="filter" placeholder="Filtrar por nombre o código..." autocomplete="off" aria-label="Filtrar productos">
+  <div class="tools">
+    <span class="count" id="count">...</span>
+    <label><input type="checkbox" id="onlymissing"> Mostrar solo los incompletos</label>
+  </div>
+  <div class="status" id="status" role="status"></div>
+  <div class="list" id="list"><div class="empty">Cargando...</div></div>
+</div>
+
+<div class="panel locked" id="sheetpanel" data-view="etiquetas">
+  <h2>Hojas de etiquetas</h2>
+  <p id="sheetinfo">...</p>
+  <div class="row"><button type="button" onclick="window.print()">Imprimir etiquetas</button></div>
+  <p>Para imprimir: en el menú del navegador elige «Imprimir», tamaño A4 y escala 100 %. Cada hoja tiene 21 etiquetas de 60×38 mm que se recortan por las líneas discontinuas.</p>
+</div>
+
+</main>
+<div class="stage locked" id="stage" data-view="etiquetas"></div>
+
+<div id="scanner" role="dialog" aria-label="Escáner de código de barras" hidden>
+  <video id="scanvideo" playsinline muted autoplay></video>
+  <div class="scanframe" aria-hidden="true"></div>
+  <p id="scanhint">Apunta al código de barras</p>
+  <button type="button" id="scanclose">Cerrar</button>
+</div>
+<nav class="nav" aria-label="Secciones">
+  <a href="#consulta" data-go="consulta"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l6 6"/></svg><span>Consulta</span></a>
+  <a href="#productos" data-go="productos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7l8-4 8 4v10l-8 4-8-4z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg><span>Productos</span></a>
+  <a href="#etiquetas" data-go="etiquetas"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.3"/></svg><span>Etiquetas</span></a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+/* ====== Conexión: configuración de Firebase ====== */
+var FIREBASE_CONFIG = {
+  databaseURL: "https://productos-del-locutorio-default-rtdb.europe-west1.firebasedatabase.app"
+};
+/* PIN para proteger la edición y la impresión. Déjalo vacío para quitar la protección. */
+var EDIT_PIN = "";
+var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور الشمر / النافع", "price": null, "order": 1}, {"code": "7411400100826", "name": "Producto Nicaraguense", "ar": "منتج نيكاراغوي", "price": null, "order": 2}, {"code": "8994963002879", "name": "Indomie Chicken Flavour", "ar": "إندومي بنكهة الدجاج", "price": null, "order": 3}, {"code": "8436029833398", "name": "Pastas Alimenticias", "ar": "معكرونة", "price": null, "order": 4}, {"code": "7702025114757", "name": "", "ar": "منتج بدون اسم", "price": null, "order": 5}, {"code": "832697001486", "name": "Frit Ravich Andean Natural Foods", "ar": "", "price": null, "order": 6}, {"code": "8437009069042", "name": "Maíz Canguil", "ar": "ذرة الفشار", "price": null, "order": 7}, {"code": "8123456789106", "name": "Palomitas", "ar": "فشار", "price": null, "order": 8}, {"code": "8410714102129", "name": "Azúcar Blanco y Nada Más", "ar": "سكر أبيض", "price": null, "order": 9}, {"code": "7707197046226", "name": "Pandebono Ingredion", "ar": "خليط بانديبونو", "price": null, "order": 10}, {"code": "7891095300631", "name": "Yoki Polvilho Doce", "ar": "نشا الذرة / البولفيلو", "price": null, "order": 11}, {"code": "8437009069219", "name": "Frijol Negro", "ar": "فاصوليا سوداء", "price": null, "order": 12}, {"code": "7707197040491", "name": "", "ar": "منتج بدون اسم", "price": null, "order": 13}, {"code": "8436048720037", "name": "", "ar": "منتج بدون اسم", "price": null, "order": 14}, {"code": "7861035520054", "name": "Hojuelas de Avena Quaker", "ar": "رقائق شوفان كويكر", "price": null, "order": 15}, {"code": "8437012146013", "name": "Frijol Rojo", "ar": "فاصوليا حمراء", "price": null, "order": 16}, {"code": "20796792", "name": "Sal Marina", "ar": "ملح بحري", "price": null, "order": 17}, {"code": "8436038771131", "name": "El Dorado Panelin", "ar": "عصير قصب السكر المجفف", "price": null, "order": 18}, {"code": "8434165614383", "name": "Cuétara Maria Oro", "ar": "بسكويت ماري", "price": null, "order": 19}, {"code": "879200001144", "name": "", "ar": "منتج بدون اسم", "price": null, "order": 20}, {"code": "8436038770578", "name": "El Dorado Panela", "ar": "بانيللا / عصير قصب السكر", "price": null, "order": 21}, {"code": "7702025185344", "name": "Macéo Galletas Noel", "ar": "", "price": null, "order": 22}, {"code": "7702025113132", "name": "Galletas Noel", "ar": "بسكويت نويل", "price": null, "order": 23}, {"code": "7702025186136", "name": "Galletas Noel", "ar": "بسكويت نويل", "price": null, "order": 24}, {"code": "7591002000547", "name": "Allofpan", "ar": "طحين الذرة", "price": null, "order": 25}, {"code": "6111249601068", "name": "Bled Conserves", "ar": "صلصة فلفل", "price": null, "order": 26}, {"code": "8412779500100", "name": "Grupo Leche Río Leche Entera", "ar": "حليب كامل الدسم", "price": null, "order": 27}, {"code": "24050142", "name": "Aldi Contigo Alubia Blanca Cocida Extra", "ar": "فاصوليا بيضاء مطبوخة", "price": null, "order": 28}, {"code": "8437014003017", "name": "", "ar": "منتج بدون اسم", "price": null, "order": 29}, {"code": "5102070910014", "name": "", "ar": "منتج بدون اسم", "price": null, "order": 30}, {"code": "7862100441724", "name": "Goya Red Habanero Pepper Hot Sauce", "ar": "صلصة هابانيرو حارة", "price": null, "order": 31}, {"code": "7752704109659", "name": "Kikkoman Soya Sauce", "ar": "صلصة الصويا", "price": null, "order": 32}, {"code": "7862100441731", "name": "Goya Hot Sauce", "ar": "صلصة حارة", "price": null, "order": 33}, {"code": "6111184001005", "name": "", "ar": "منتج بدون اسم", "price": null, "order": 34}, {"code": "6111184001036", "name": "", "ar": "منتج بدون اسم", "price": null, "order": 35}, {"code": "5410350310240", "name": "Aroma de Azahar", "ar": "ماء الزهر", "price": null, "order": 36}, {"code": "8436563431333", "name": "Papel Higiénico", "ar": "ورق صحي", "price": null, "order": 37}, {"code": "6959275562468", "name": "", "ar": "منتج بدون اسم", "price": null, "order": 38}, {"code": "5603318253813", "name": "Pomodoro Tomates", "ar": "طماطم", "price": null, "order": 39}, {"code": "8412164008105", "name": "Caldos del Norte Carne", "ar": "مرق بقر", "price": null, "order": 40}, {"code": "5603318253356", "name": "Tomates", "ar": "طماطم", "price": null, "order": 41}, {"code": "6977113300614", "name": "Aulad Khtira", "ar": "شعرية / معكرونة صينية", "price": null, "order": 42}, {"code": "044695003090", "name": "Semvra Facundo", "ar": "حليب / كريمة الكوكو", "price": null, "order": 43}, {"code": "8436555745530", "name": "Lenteja Roja Entera", "ar": "عدس أحمر كامل", "price": 2, "order": 44}, {"code": "8480010252958", "name": "Barritaa", "ar": "", "price": 20, "order": 1793306938451}];
+</script>
+<script>
+(function () {
+  var PER_SHEET = 21, SHEET_PX = 794;
+  var L = ["0001101","0011001","0010011","0111101","0100011","0110001","0101111","0111011","0110111","0001011"];
+  var G = ["0100111","0110011","0011011","0100001","0011101","0111001","0000101","0010001","0001001","0010111"];
+  var R = ["1110010","1100110","1101100","1000010","1011100","1001110","1010000","1000100","1001000","1110100"];
+  var PARITY = ["LLLLLL","LLGLGG","LLGGLG","LLGGGL","LGLLGG","LGGLLG","LGGGLL","LGLGLG","LGLGGL","LGGLGL"];
+  var products = [];
+  var rows = new Map();
+  var col = null;
+  var chain = {};
+
+  function $(id) { return document.getElementById(id); }
+  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+  function fmt(n) { return n.toFixed(2).replace(".", ","); }
+
+  /* ---- barcodes (EAN-13, UPC-A as EAN-13, EAN-8) ---- */
+  function validCode(c) {
+    if (!/^\d+$/.test(c) || [8, 12, 13].indexOf(c.length) === -1) return false;
+    var d = c.split("").map(Number), chk = d.pop(), s = 0, n = d.length;
+    for (var i = 0; i < n; i++) {
+      var w = (c.length === 13) ? (i % 2 ? 3 : 1) : (i % 2 ? 1 : 3);
+      s += d[i] * w;
+    }
+    return (10 - (s % 10)) % 10 === chk;
+  }
+  function barcodeSvg(code) {
+    if (!/^\d+$/.test(code)) return "";
+    var bits;
+    if (code.length === 8) {
+      bits = "101";
+      for (var a = 0; a < 4; a++) bits += L[+code[a]];
+      bits += "01010";
+      for (var b = 4; b < 8; b++) bits += R[+code[b]];
+      bits += "101";
+    } else if (code.length === 12 || code.length === 13) {
+      var c13 = code.length === 12 ? "0" + code : code;
+      var par = PARITY[+c13[0]];
+      bits = "101";
+      for (var i = 1; i <= 6; i++) bits += (par[i - 1] === "L" ? L : G)[+c13[i]];
+      bits += "01010";
+      for (var j = 7; j <= 12; j++) bits += R[+c13[j]];
+      bits += "101";
+    } else return "";
+    var rects = "", x = 0;
+    while (x < bits.length) {
+      if (bits[x] === "1") {
+        var w = 1; while (bits[x + w] === "1") w++;
+        rects += '<rect x="' + x + '" y="0" width="' + w + '" height="30" fill="#111"/>';
+        x += w;
+      } else x++;
+    }
+    return '<svg viewBox="0 0 ' + bits.length + ' 30" preserveAspectRatio="none" aria-hidden="true">' + rects + '</svg>';
+  }
+
+  /* ---- labels ---- */
+  function tag(p) {
+    var svg = barcodeSvg(p.code);
+    return '<div class="tag"><div class="tag-in">' +
+      '<div class="tag-name"><span>' + esc(p.name) + '</span></div>' +
+      '<div class="tag-price"><b>' + fmt(p.price) + '</b><i>€</i></div>' +
+      '<div class="tag-foot"><small>PVP<br>IVA incl.</small>' +
+      '<div class="bar">' + svg + '<span>' + esc(p.code) + '</span></div></div>' +
+      '</div></div>';
+  }
+  function renderSheets() {
+    var ready = products.filter(function (p) { return p.name && p.price !== null; });
+    var html = "";
+    for (var i = 0; i < ready.length; i += PER_SHEET) {
+      html += '<div class="fit"><div class="sheet">' + ready.slice(i, i + PER_SHEET).map(tag).join("") + '</div></div>';
+    }
+    $("stage").innerHTML = html;
+    var sheets = Math.ceil(ready.length / PER_SHEET);
+    $("sheetinfo").textContent = ready.length
+      ? ready.length + " etiquetas en " + sheets + (sheets === 1 ? " hoja" : " hojas") + ". A " + (products.length - ready.length) + " productos les falta el nombre o el precio."
+      : "Aún no hay etiquetas. Introduce el nombre y el precio de al menos un producto.";
+    fit();
+  }
+  function fit() {
+    var avail = document.documentElement.clientWidth - 32;
+    var z = Math.min(1, avail / SHEET_PX);
+    document.querySelectorAll(".sheet").forEach(function (s) { s.style.zoom = z; });
+  }
+
+  /* ---- product rows ---- */
+  function parsePrice(t) {
+    t = t.replace(/[€\s]/g, "").replace(",", ".");
+    if (t === "") return null;
+    if (!/^\d+(\.\d{1,2})?$/.test(t)) return NaN;
+    return Math.round(parseFloat(t) * 100) / 100;
+  }
+  function flash(text, err) {
+    var s = $("status");
+    s.textContent = text; s.className = "status" + (err ? " err" : "");
+    clearTimeout(flash.t);
+    flash.t = setTimeout(function () { s.textContent = ""; }, 2500);
+  }
+  function save(id, patch) {
+    if (!col) { flash("No se puede guardar en esta vista.", true); return; }
+    var prev = chain[id] || Promise.resolve();
+    chain[id] = prev.then(function () { return col.child(id).update(patch); })
+      .then(function () { flash("Guardado ✓"); }, function () { flash("No se pudo guardar. Inténtalo de nuevo.", true); });
+  }
+  function byId(id) { return products.filter(function (p) { return p.id === id; })[0]; }
+
+  function createRow(p) {
+    var el = document.createElement("div");
+    el.className = "item"; el.dataset.id = p.id;
+    el.innerHTML =
+      '<input type="text" class="in-name" placeholder="Nombre del producto" autocomplete="off" autocapitalize="words" aria-label="Nombre del producto">' +
+      '<div class="item-2">' +
+        '<div class="pricebox"><input type="text" class="in-price" inputmode="decimal" placeholder="0,00" autocomplete="off" aria-label="Precio"><span>€</span></div>' +
+        '<div class="meta"><span class="code"></span></div>' +
+        '<div class="pills"></div>' +
+        '<button type="button" class="ghost del">Eliminar</button>' +
+      '</div>';
+    var nameIn = el.querySelector(".in-name"), priceIn = el.querySelector(".in-price"), del = el.querySelector(".del");
+    nameIn.addEventListener("change", function () { save(p.id, { name: nameIn.value.trim() }); });
+    priceIn.addEventListener("change", function () {
+      var v = parsePrice(priceIn.value);
+      if (v !== null && isNaN(v)) { flash("Precio no válido. Ejemplo: 8 o 3,50", true); var cur = byId(p.id); priceIn.value = cur && cur.price !== null ? fmt(cur.price) : ""; return; }
+      save(p.id, { price: v });
+    });
+    var armed = null;
+    del.addEventListener("click", function () {
+      if (!armed) {
+        del.textContent = "Confirmar"; del.className = "danger del";
+        armed = setTimeout(function () { armed = null; del.textContent = "Eliminar"; del.className = "ghost del"; }, 3500);
+        return;
+      }
+      clearTimeout(armed); armed = null;
+      if (col) col.child(p.id).remove().then(function () { flash("Eliminado"); }, function () { flash("No se pudo eliminar.", true); });
+    });
+    return el;
+  }
+  function updateRow(el, p) {
+    var nameIn = el.querySelector(".in-name"), priceIn = el.querySelector(".in-price");
+    if (document.activeElement !== nameIn && nameIn.value !== p.name) nameIn.value = p.name;
+    var pv = p.price !== null ? fmt(p.price) : "";
+    if (document.activeElement !== priceIn && priceIn.value !== pv) priceIn.value = pv;
+    var codeEl = el.querySelector(".code");
+    codeEl.textContent = p.code + (validCode(p.code) ? "" : "  ⚠");
+    var pills = [];
+    if (!p.name) pills.push("Sin nombre");
+    if (p.price === null) pills.push("Sin precio");
+    if (!validCode(p.code)) pills.push("Revisa el código de barras");
+    el.querySelector(".pills").innerHTML = pills.map(function (t) { return '<span class="pill">' + t + '</span>'; }).join("");
+    el.classList.toggle("complete", !!p.name && p.price !== null && validCode(p.code));
+  }
+  function syncRows() {
+    var list = $("list"), seen = {};
+    if (!products.length) {
+      rows.forEach(function (el) { el.remove(); }); rows.clear();
+      list.innerHTML = '<div class="empty">Aún no hay productos. Añade el primero con «Añadir producto nuevo».</div>';
+      return;
+    }
+    var empty = list.querySelector(".empty"); if (empty) empty.remove();
+    products.forEach(function (p, i) {
+      seen[p.id] = true;
+      var el = rows.get(p.id);
+      if (!el) { el = createRow(p); rows.set(p.id, el); }
+      updateRow(el, p);
+      if (list.children[i] !== el) list.insertBefore(el, list.children[i] || null);
+    });
+    rows.forEach(function (el, id) { if (!seen[id]) { el.remove(); rows.delete(id); } });
+    applyFilter();
+  }
+  function applyFilter() {
+    var q = norm($("filter").value.trim());
+    products.forEach(function (p) {
+      var el = rows.get(p.id);
+      if (el) el.hidden = !!q && norm(p.name).indexOf(q) === -1 && p.code.indexOf(q) === -1;
+    });
+  }
+  function renderCount() {
+    var noPrice = products.filter(function (p) { return p.price === null; }).length;
+    var noName = products.filter(function (p) { return !p.name; }).length;
+    $("count").innerHTML = '<b>' + products.length + '</b> productos · sin precio <b>' + noPrice + '</b> · sin nombre <b>' + noName + '</b>';
+  }
+
+  /* ---- price lookup ---- */
+  function norm(t) { return t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""); }
+  function lookup() {
+    var q = $("q").value.trim(), box = $("result");
+    if (!q) { box.className = "result idle"; box.textContent = "Escribe el código o el nombre, o escanea el código de barras."; return; }
+    var digits = q.replace(/\s+/g, ""), hit = null;
+    if (/^\d{4,}$/.test(digits)) {
+      hit = products.filter(function (p) { return p.code === digits || p.code.slice(-digits.length) === digits; })[0];
+    }
+    if (!hit) {
+      var nq = norm(q);
+      hit = products.filter(function (p) { return norm(p.name).indexOf(nq) !== -1; })[0];
+    }
+    if (!hit) { box.className = "result miss"; box.textContent = "Este producto no está en la lista."; return; }
+    box.className = "result";
+    box.innerHTML = '<div class="r-name">' + esc(hit.name || "(sin nombre)") + '</div>' +
+      (hit.price !== null ? '<div class="r-price">' + fmt(hit.price) + '<i>€</i></div>' : '<div class="r-ar" style="color:var(--warn)">Precio aún sin introducir</div>') +
+      '<div class="r-code">' + esc(hit.code) + '</div>';
+  }
+
+  /* ---- read a barcode from a photo ---- */
+  function toCanvas(bmp, maxSide, rotate) {
+    var s = maxSide / Math.max(bmp.width, bmp.height);
+    var w = Math.round(bmp.width * s), h = Math.round(bmp.height * s);
+    var c = document.createElement("canvas"), ctx = c.getContext("2d");
+    if (rotate) { c.width = h; c.height = w; ctx.translate(h, 0); ctx.rotate(Math.PI / 2); }
+    else { c.width = w; c.height = h; }
+    ctx.drawImage(bmp, 0, 0, w, h);
+    return c;
+  }
+  function zxingRead(canvas) {
+    var Z = window.ZXing;
+    if (!Z) return null;
+    var hints = new Map();
+    hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.UPC_E]);
+    hints.set(Z.DecodeHintType.TRY_HARDER, true);
+    var reader = new Z.MultiFormatReader();
+    reader.setHints(hints);
+    try {
+      var src = new Z.HTMLCanvasElementLuminanceSource(canvas);
+      return reader.decode(new Z.BinaryBitmap(new Z.HybridBinarizer(src))).getText();
+    } catch (e) { return null; }
+  }
+  function scan(file) {
+    var msg = $("scanmsg");
+    msg.textContent = "Leyendo...";
+    createImageBitmap(file).then(function (bmp) {
+      var native = null;
+      if ("BarcodeDetector" in window) {
+        native = new BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e"] })
+          .detect(toCanvas(bmp, 1600, false)).then(function (r) { return r && r.length ? r[0].rawValue : null; }, function () { return null; });
+      }
+      return Promise.resolve(native).then(function (code) {
+        if (code) return code;
+        var sizes = [1600, 2400, 1000, 700];
+        for (var i = 0; i < sizes.length; i++) {
+          for (var r = 0; r < 2; r++) {
+            code = zxingRead(toCanvas(bmp, sizes[i], r === 1));
+            if (code) return code;
+          }
+        }
+        return null;
+      });
+    }).then(function (code) {
+      if (code) { $("q").value = code; msg.textContent = "Código leído."; lookup(); }
+      else msg.textContent = "No se encontró ningún código en la imagen. Acerca la cámara y deja el código nítido y en horizontal.";
+    }).catch(function () { msg.textContent = "No se pudo leer la imagen. Escribe el código."; });
+  }
+
+  /* ---- live camera scanner ---- */
+  var camStream = null, camTimer = null, camDetector = null;
+  function stopCam() {
+    clearTimeout(camTimer); camTimer = null;
+    if (camStream) { camStream.getTracks().forEach(function (t) { t.stop(); }); camStream = null; }
+    var v = $("scanvideo"); v.srcObject = null; $("scanner").hidden = true;
+  }
+  function gotCode(code) {
+    stopCam(); $("q").value = code; $("scanmsg").textContent = "Código leído."; lookup();
+    try { if (navigator.vibrate) navigator.vibrate(60); } catch (e) {}
+  }
+  function camLoop() {
+    var v = $("scanvideo");
+    if (!camStream) return;
+    var next = function () { if (camStream) camTimer = setTimeout(camLoop, 220); };
+    if (v.readyState < 2 || !v.videoWidth) { next(); return; }
+    if (camDetector) {
+      camDetector.detect(v).then(function (r) { if (r && r.length) gotCode(r[0].rawValue); else next(); }, function () { next(); });
+    } else {
+      var c = document.createElement("canvas"), k = Math.min(1, 1280 / v.videoWidth);
+      c.width = Math.round(v.videoWidth * k); c.height = Math.round(v.videoHeight * k);
+      c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+      var code = zxingRead(c);
+      if (code) gotCode(code); else next();
+    }
+  }
+  function camError(err) {
+    var n = (err && err.name) || "Error", msg = $("scanmsg");
+    if (n === "NotAllowedError" || n === "SecurityError" || n === "PermissionDeniedError") {
+      msg.textContent = "La cámara está bloqueada para esta app. Ve a Ajustes del teléfono → Apps → Etiquetas (o Chrome) → Permisos → Cámara → Permitir. También puedes elegir una foto.";
+    } else if (n === "NotFoundError" || n === "DevicesNotFoundError") {
+      msg.textContent = "No se encontró ninguna cámara en este dispositivo. Elige una foto.";
+    } else if (n === "NotReadableError" || n === "TrackStartError" || n === "AbortError") {
+      msg.textContent = "La cámara está en uso por otra app. Ciérrala y vuelve a intentarlo.";
+    } else {
+      msg.textContent = "No se pudo abrir la cámara (" + n + "). Elige una foto.";
+    }
+  }
+  function askCam(constraints) { return navigator.mediaDevices.getUserMedia({ audio: false, video: constraints }); }
+  function openCam() {
+    var msg = $("scanmsg");
+    if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { msg.textContent = "Este navegador no permite usar la cámara aquí. Usa «Elegir una foto»."; return; }
+    try { camDetector = "BarcodeDetector" in window ? new BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e"] }) : null; } catch (e) { camDetector = null; }
+    msg.textContent = "Abriendo la cámara...";
+    askCam({ facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } })
+      .catch(function (err) {
+        if (err && (err.name === "NotAllowedError" || err.name === "SecurityError")) throw err;
+        return askCam(true);                                   /* segundo intento con ajustes mínimos */
+      })
+      .then(function (st) {
+        camStream = st; var v = $("scanvideo"); v.srcObject = st; $("scanner").hidden = false; msg.textContent = "";
+        return v.play().catch(function () {});
+      })
+      .then(function () { if (camStream) camLoop(); })
+      .catch(function (err) { stopCam(); camError(err); });
+  }
+  $("camopen").addEventListener("click", openCam);
+  $("scanclose").addEventListener("click", stopCam);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") stopCam(); });
+  document.addEventListener("visibilitychange", function () { if (document.hidden) stopCam(); });
+  window.addEventListener("hashchange", stopCam);
+
+  /* ---- add a product ---- */
+  function addProduct() {
+    var code = $("addcode").value.replace(/\s+/g, ""), name = $("addname").value.trim(), price = parsePrice($("addprice").value);
+    if (!/^\d{6,14}$/.test(code)) { flash("Escribe el código de barras solo con números.", true); return; }
+    if (price !== null && isNaN(price)) { flash("Precio no válido. Ejemplo: 8 o 3,50", true); return; }
+    if (!col) { flash("No se puede guardar en esta vista.", true); return; }
+    var ref = col.child(code);
+    ref.once("value").then(function (snap) {
+      if (snap.exists()) return ref.update({ name: name || (snap.val() || {}).name || "", price: price });
+      return ref.set({ code: code, name: name, ar: "", price: price, order: Date.now() });
+    }).then(function () {
+      flash("Añadido ✓");
+      $("addcode").value = ""; $("addname").value = ""; $("addprice").value = "";
+    }, function () { flash("No se pudo añadir.", true); });
+  }
+
+  /* ---- data ---- */
+  var pending = false;
+  function refresh() {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(function () { pending = false; syncRows(); renderCount(); renderSheets(); lookup(); });
+  }
+  function onSnap(snap) {
+    products = [];
+    snap.forEach(function (d) {
+      var x = d.val() || {};
+      products.push({ id: d.key, code: String(x.code || d.key), name: String(x.name || ""), ar: String(x.ar || ""), price: typeof x.price === "number" ? x.price : null });
+    });
+    try { localStorage.setItem("etq-products", JSON.stringify(products)); } catch (e) {}
+    refresh();
+  }
+  var db = null;
+  function start() {
+    if (!window.firebase || !FIREBASE_CONFIG.databaseURL) { $("setup").hidden = false; fallback("Conecta primero la base de datos."); return; }
+    try {
+      firebase.initializeApp(FIREBASE_CONFIG);
+      db = firebase.database();
+      col = db.ref("products");
+      col.orderByChild("order").on("value", onSnapServer, function () { $("setup").hidden = false; fallback("No se pudo conectar con la base de datos. Revisa Internet y las reglas."); });
+    } catch (e) { fallback("No se pudo iniciar la base de datos."); }
+  }
+  function onSnapServer(snap) {
+    $("setup").hidden = true;
+    onSnap(snap);
+    $("seedpanel").hidden = snap.exists();
+    if (!$("seedpanel").hidden) $("seedcount").textContent = SEED.length + " productos listos para cargar";
+  }
+  function seedAll() {
+    if (!db) return;
+    var upd = {};
+    SEED.forEach(function (d, i) {
+      upd[d.code] = { code: d.code, name: d.name || "", ar: d.ar || "", price: typeof d.price === "number" ? d.price : null, order: d.order || (i + 1) };
+    });
+    col.update(upd).then(function () { flash("Productos cargados ✓"); }, function () { flash("No se pudo cargar. Revisa las reglas.", true); });
+  }
+  function fallback(msg) {
+    $("list").innerHTML = '<div class="empty">' + (msg || "No se pudieron cargar los productos.") + '</div>';
+    $("count").textContent = "";
+  }
+
+  /* ---- optional PIN lock for editing ---- */
+  function unlocked() { try { return sessionStorage.getItem("pinok") === "1"; } catch (e) { return false; } }
+  function applyLock() {
+    var lock = !!EDIT_PIN && !unlocked();
+    document.querySelectorAll(".locked").forEach(function (el) { el.hidden = lock; });
+    $("pinpanel").hidden = !lock;
+  }
+  $("pinbtn").addEventListener("click", function () {
+    if ($("pin").value === EDIT_PIN) { try { sessionStorage.setItem("pinok", "1"); } catch (e) {} $("pinerr").textContent = ""; applyLock(); renderSheets(); }
+    else $("pinerr").textContent = "PIN incorrecto.";
+  });
+  $("seedbtn").addEventListener("click", seedAll);
+
+  $("q").addEventListener("input", lookup);
+  $("filter").addEventListener("input", applyFilter);
+  $("shot").addEventListener("change", function (e) { if (e.target.files && e.target.files[0]) scan(e.target.files[0]); e.target.value = ""; });
+  $("addbtn").addEventListener("click", addProduct);
+  $("onlymissing").addEventListener("change", function (e) { $("list").classList.toggle("only-missing", e.target.checked); });
+  window.addEventListener("resize", fit);
+  try { var cached = JSON.parse(localStorage.getItem("etq-products") || "null"); if (cached && cached.length) { products = cached; refresh(); } } catch (e) {}
+  applyLock();
+  renderSheets();
+  start();
+})();
+</script>
+
+<script>
+(function () {
+  var views = ["consulta", "productos", "etiquetas"], links = document.querySelectorAll(".nav a");
+  function show() {
+    var h = location.hash.slice(1); if (views.indexOf(h) < 0) h = "consulta";
+    document.body.setAttribute("data-tab", h);
+    links.forEach(function (a) { var on = a.getAttribute("data-go") === h; a.classList.toggle("on", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+    window.scrollTo(0, 0);
+    if (h === "etiquetas") window.dispatchEvent(new Event("resize"));
+  }
+  window.addEventListener("hashchange", show); show();
+})();
+</script>
+<script>
+(function () {
+  if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(function () {});
+  var standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+  var btn = document.getElementById("installbtn"), box = document.getElementById("ioshint"), txt = document.getElementById("installtxt"), ev = null;
+  if (standalone) { btn.hidden = true; return; }
+  window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); ev = e; });
+  window.addEventListener("appinstalled", function () { btn.hidden = true; box.hidden = true; });
+  var ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  btn.addEventListener("click", function () {
+    if (ev) { ev.prompt(); ev.userChoice.then(function () { ev = null; }); return; }
+    txt.textContent = ios
+      ? "En Safari pulsa el botón Compartir y elige «Añadir a pantalla de inicio»."
+      : "Abre el menú ⋮ del navegador (arriba a la derecha) y elige «Instalar aplicación» o «Añadir a pantalla de inicio». Si no aparece, abre esta página en Chrome.";
+    box.hidden = false; box.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+})();
+</script>
+</body>
+</html>
