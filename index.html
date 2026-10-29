@@ -2,8 +2,17 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#14202b">
+<meta name="application-name" content="Etiquetas Locutorio">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Etiquetas">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <title>Etiquetas Locutorio</title>
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&display=swap">
@@ -164,9 +173,11 @@ pre.code { margin: 0; padding: 10px 12px; background: var(--bg); border: 1px sol
       <h1>Etiquetas Locutorio</h1>
       <p>Consulta de precios e impresión de etiquetas</p>
     </div>
+    <button type="button" id="installbtn" hidden style="margin-inline-start:auto;background:var(--tag);color:#14202b">Instalar app</button>
   </div>
 </header>
 <main>
+<div class="panel" id="ioshint" hidden><h2>Instalar en el iPhone</h2><p>Pulsa el botón Compartir de Safari y elige «Añadir a pantalla de inicio».</p></div>
 
 
 
@@ -521,6 +532,7 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
       var x = d.val() || {};
       products.push({ id: d.key, code: String(x.code || d.key), name: String(x.name || ""), ar: String(x.ar || ""), price: typeof x.price === "number" ? x.price : null });
     });
+    try { localStorage.setItem("etq-products", JSON.stringify(products)); } catch (e) {}
     refresh();
   }
   var db = null;
@@ -570,11 +582,24 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
   $("addbtn").addEventListener("click", addProduct);
   $("onlymissing").addEventListener("change", function (e) { $("list").classList.toggle("only-missing", e.target.checked); });
   window.addEventListener("resize", fit);
+  try { var cached = JSON.parse(localStorage.getItem("etq-products") || "null"); if (cached && cached.length) { products = cached; refresh(); } } catch (e) {}
   applyLock();
   renderSheets();
   start();
 })();
 </script>
 
+<script>
+(function () {
+  if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(function () {});
+  var standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+  var btn = document.getElementById("installbtn"), ev = null;
+  window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); ev = e; if (!standalone) btn.hidden = false; });
+  btn.addEventListener("click", function () { if (!ev) return; ev.prompt(); ev.userChoice.then(function () { ev = null; btn.hidden = true; }); });
+  window.addEventListener("appinstalled", function () { btn.hidden = true; });
+  var ios = /iphone|ipad|ipod/i.test(navigator.userAgent) && !standalone;
+  if (ios) document.getElementById("ioshint").hidden = false;
+})();
+</script>
 </body>
 </html>
