@@ -510,12 +510,16 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
 
   /* ---- price lookup ---- */
   function norm(t) { return t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""); }
+  /* UPC-A (12 cifras) y EAN-13 con cero inicial son el mismo código */
+  function canon(c) { return /^\d{12,13}$/.test(c) ? ("0" + c).slice(-13) : c; }
   function lookup() {
     var q = $("q").value.trim(), box = $("result");
     if (!q) { box.className = "result idle"; box.textContent = "Escribe el código o el nombre, o escanea el código de barras."; return; }
     var digits = q.replace(/\s+/g, ""), hit = null;
     if (/^\d{4,}$/.test(digits)) {
-      hit = products.filter(function (p) { return p.code === digits || p.code.slice(-digits.length) === digits; })[0];
+      var cq = canon(digits);
+      hit = products.filter(function (p) { return p.code === digits || canon(p.code) === cq; })[0] ||
+            products.filter(function (p) { return p.code.slice(-digits.length) === digits; })[0];
     }
     if (!hit) {
       var nq = norm(q);
