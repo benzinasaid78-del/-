@@ -142,14 +142,19 @@ body[data-tab="etiquetas"] .stage[data-view="etiquetas"] { display: grid; }
 /* ---- caja (carrito) ---- */
 .cart-total { background: var(--tag); color: var(--tag-fg); border-radius: 12px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: baseline; direction: ltr; }
 .cart-total span { font-weight: 600; } .cart-total b { font: 700 52px/1 var(--font-price); font-variant-numeric: tabular-nums; }
-.cline { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--panel); direction: ltr; text-align: left; }
-.cline:last-child { border-bottom: 0; }
-.cline .cn { font-weight: 600; text-transform: uppercase; overflow-wrap: anywhere; }
-.cline .ct { font: 700 18px var(--font-price); text-align: right; font-variant-numeric: tabular-nums; }
-.cline .cu { color: var(--muted); font-size: 13px; }
-.cline .cq { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
-.cline .cq button { padding: 4px 12px; font-size: 16px; min-width: 38px; }
-.cline .cq b { min-width: 1.6em; text-align: center; }
+#cartlist.list { border: 0; border-radius: 0; overflow: visible; gap: 10px; background: transparent; }
+#cartlist .empty { border: 1.5px dashed var(--line); border-radius: 12px; }
+.cline { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "cn ct" "cu cq"; gap: 6px 12px; align-items: center; padding: 12px 14px; border: 1px solid var(--line); border-inline-start: 4px solid var(--tag); border-radius: 12px; background: var(--panel); box-shadow: 0 1px 2px rgba(20,32,43,.06); direction: ltr; text-align: left; }
+.cline .cn { grid-area: cn; font: 600 14.5px/1.3 var(--font-name); text-transform: uppercase; letter-spacing: .02em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.cline .ct { grid-area: ct; align-self: start; font: 700 19px/1.2 var(--font-price); white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+.cline .cu { grid-area: cu; color: var(--muted); font-size: 13px; }
+.cline .cq { grid-area: cq; display: flex; gap: 8px; align-items: center; justify-content: flex-end; }
+.stepper { display: inline-flex; align-items: center; border: 1.5px solid var(--line); border-radius: 99px; background: var(--bg); overflow: hidden; }
+.stepper button { background: transparent; color: var(--fg); border: 0; border-radius: 0; width: 38px; height: 36px; padding: 0; font-size: 20px; line-height: 1; }
+.stepper button:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); filter: none; }
+.stepper b { min-width: 2em; text-align: center; font: 700 16px var(--font-price); font-variant-numeric: tabular-nums; }
+.cline .dline { width: 36px; height: 36px; padding: 0; border-radius: 50%; background: var(--warn-bg); color: var(--warn); display: grid; place-items: center; }
+.cline .dline svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 #scanbar { position: absolute; left: 12px; right: 12px; top: calc(12px + env(safe-area-inset-top, 0px)); background: rgba(0,0,0,.78); color: #fff; border-radius: 12px; padding: 10px 14px; direction: ltr; text-align: left; display: grid; gap: 2px; }
 #scanbar[hidden] { display: none; }
 #scanbar .sb-last { font-weight: 600; text-transform: uppercase; font-size: 15px; overflow-wrap: anywhere; }
@@ -809,7 +814,8 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
       var p = byId(l.id), u = Math.round((p.price || 0) * 100);
       return '<div class="cline" data-id="' + esc(l.id) + '"><div class="cn">' + esc(p.name || p.code) + '</div><div class="ct">' + eur(u * l.qty) + '</div>' +
         '<div class="cu">' + fmt(u / 100) + ' € × ' + l.qty + '</div>' +
-        '<div class="cq"><button type="button" class="ghost" data-act="dec" aria-label="Quitar uno">−</button><b>' + l.qty + '</b><button type="button" class="ghost" data-act="inc" aria-label="Añadir uno">+</button><button type="button" class="danger" data-act="del" aria-label="Eliminar línea">✕</button></div></div>';
+        '<div class="cq"><div class="stepper" role="group" aria-label="Cantidad"><button type="button" data-act="dec" aria-label="Quitar uno">−</button><b>' + l.qty + '</b><button type="button" data-act="inc" aria-label="Añadir uno">+</button></div>' +
+        '<button type="button" class="dline" data-act="del" aria-label="Eliminar línea"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button></div></div>';
     }).join("") : '<div class="empty">Escanea los productos del cliente.</div>';
     if (!$("scanner").hidden) $("sbtotal").textContent = "Total: " + eur(cartCents());
   }
