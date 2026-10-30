@@ -137,6 +137,10 @@ body[data-tab="etiquetas"] .stage[data-view="etiquetas"] { display: grid; }
 #scanner[hidden] { display: none; }
 #scanvideo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .scanframe { position: relative; width: min(86vw, 420px); aspect-ratio: 2 / 1; border: 3px solid var(--tag); border-radius: 14px; box-shadow: 0 0 0 100vmax rgba(0,0,0,.55); }
+.scanframe { transition: border-color .12s, background .12s; }
+.scanframe.ok { border-color: #2ecc71; background: rgba(46,204,113,.30); }
+.scanframe.bad { border-color: #ff5a4d; background: rgba(255,90,77,.30); }
+#scanbar .sb-last.ok { color: #8be28b; }
 #scanhint { position: absolute; left: 0; right: 0; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); margin: 0; text-align: center; color: #fff; font-weight: 600; text-shadow: 0 1px 4px #000; }
 #scanclose { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(32px + env(safe-area-inset-bottom, 0px)); background: var(--tag); color: #14202b; padding: 12px 28px; font-size: 16px; }
 /* ---- caja (carrito) ---- */
@@ -793,13 +797,28 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
     var nq = norm(q.trim());
     return nq ? products.filter(function (p) { return norm(p.name).indexOf(nq) !== -1; })[0] : null;
   }
-  function beep(ok) {
+  function unlockAudio() {
     try {
       audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-      var o = audioCtx.createOscillator(), g = audioCtx.createGain();
-      o.frequency.value = ok ? 1100 : 300; g.gain.value = .08; o.connect(g); g.connect(audioCtx.destination);
-      o.start(); o.stop(audioCtx.currentTime + (ok ? .09 : .25));
+      if (audioCtx.state === "suspended") audioCtx.resume();
     } catch (e) {}
+  }
+  function tone(f, start, dur) {
+    var t = audioCtx.currentTime + start, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = "square"; o.frequency.value = f;
+    g.gain.setValueAtTime(.25, t); g.gain.exponentialRampToValueAtTime(.001, t + dur);
+    o.connect(g); g.connect(audioCtx.destination); o.start(t); o.stop(t + dur + .02);
+  }
+  function beep(ok) {
+    try {
+      unlockAudio();
+      if (ok) { tone(1800, 0, .13); } else { tone(320, 0, .18); tone(220, .22, .28); }
+    } catch (e) {}
+  }
+  function flashScan(ok) {
+    var f = document.querySelector(".scanframe"); if (!f) return;
+    f.classList.remove("ok", "bad"); void f.offsetWidth; f.classList.add(ok ? "ok" : "bad");
+    clearTimeout(flashScan.t); flashScan.t = setTimeout(function () { f.classList.remove("ok", "bad"); }, 600);
   }
   function cartCents() {
     return cart.reduce(function (t, l) { var p = byId(l.id); return t + (p && p.price !== null ? Math.round(p.price * 100) * l.qty : 0); }, 0);
@@ -824,15 +843,15 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
     cm.textContent = "";
     if (!p || p.price === null) {
       var t = !p ? "No está en la lista: " + q : "Sin precio: " + (p.name || p.code);
-      if (!p) lastUnknown = q.replace(/\s+/g, ""); sb.textContent = t; sb.className = "sb-last bad"; cm.textContent = t; beep(false);
-      try { if (navigator.vibrate) navigator.vibrate([80, 60, 80]); } catch (e) {}
+      if (!p) lastUnknown = q.replace(/\s+/g, ""); sb.textContent = t; sb.className = "sb-last bad"; cm.textContent = t; beep(false); flashScan(false);
+      try { if (navigator.vibrate) navigator.vibrate([200, 80, 200]); } catch (e) {}
       return;
     }
     var l = cart.filter(function (x) { return x.id === p.id; })[0];
     if (l) l.qty++; else cart.push({ id: p.id, qty: 1 });
-    sb.textContent = (p.name || p.code) + " · " + fmt(p.price) + " €"; sb.className = "sb-last";
-    beep(true);
-    try { if (navigator.vibrate) navigator.vibrate(50); } catch (e) {}
+    sb.textContent = (p.name || p.code) + " · " + fmt(p.price) + " €"; sb.className = "sb-last ok";
+    beep(true); flashScan(true);
+    try { if (navigator.vibrate) navigator.vibrate(150); } catch (e) {}
     renderCart();
   }
   $("cartlist").addEventListener("click", function (e) {
@@ -853,7 +872,7 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
     addToCart(v); this.value = "";
   });
   $("cashscan").addEventListener("click", function () {
-    cashMode = true; lastCode = ""; lastAt = 0;
+    unlockAudio(); cashMode = true; lastCode = ""; lastAt = 0;
     $("scanbar").hidden = false; $("sblast").textContent = "Escanea el primer producto"; $("sblast").className = "sb-last";
     $("sbtotal").textContent = "Total: " + eur(cartCents());
     $("scanclose").textContent = "Terminar";
@@ -1021,7 +1040,7 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
   $("seedbtn").addEventListener("click", seedAll);
 
   $("filter").addEventListener("input", applyFilter);
-  $("shot").addEventListener("change", function (e) { if (e.target.files && e.target.files[0]) scan(e.target.files[0]); e.target.value = ""; });
+  $("shot").addEventListener("change", function (e) { unlockAudio(); if (e.target.files && e.target.files[0]) scan(e.target.files[0]); e.target.value = ""; });
   $("addbtn").addEventListener("click", addProduct);
   $("onlymissing").addEventListener("change", function (e) { $("list").classList.toggle("only-missing", e.target.checked); });
   window.addEventListener("resize", fit);
