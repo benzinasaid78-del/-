@@ -787,7 +787,7 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
   }
 
   /* ---- caja: carrito con escaneo continuo ---- */
-  var lastUnknown = "", cart = [], cashMode = false, lastCode = "", lastAt = 0, audioCtx = null;
+  var lastUnknown = "", cart = [], cashMode = false, lastCode = "", lastAt = 0, audioCtx = null, ABSENT_MS = 800;
   function findProduct(q) {
     var digits = q.replace(/\s+/g, ""), cq = canon(digits);
     if (/^\d{4,}$/.test(digits)) {
@@ -848,8 +848,8 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
       return;
     }
     var l = cart.filter(function (x) { return x.id === p.id; })[0];
-    if (l) l.qty++; else cart.push({ id: p.id, qty: 1 });
-    sb.textContent = (p.name || p.code) + " · " + fmt(p.price) + " €"; sb.className = "sb-last ok";
+    if (l) l.qty++; else { l = { id: p.id, qty: 1 }; cart.push(l); }
+    sb.textContent = (p.name || p.code) + " · " + fmt(p.price) + " €" + (l.qty > 1 ? "  ×" + l.qty : ""); sb.className = "sb-last ok";
     beep(true); flashScan(true);
     try { if (navigator.vibrate) navigator.vibrate(150); } catch (e) {}
     renderCart();
@@ -890,10 +890,12 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
     renderCart();
   }
   function gotCode(code) {
-    var now = Date.now(), same = code === lastCode && now - lastAt < 2500;
+    /* Mismo código = mismo artículo SOLO si no ha dejado de verse más de ABSENT_MS.
+       Si el código sale del encuadre y vuelve (otra unidad igual), se cuenta de nuevo. */
+    var now = Date.now(), same = code === lastCode && now - lastAt < ABSENT_MS;
     lastAt = now;
     if (!same) { lastCode = code; addToCart(code); }
-    camTimer = setTimeout(camLoop, same ? 220 : 900);
+    camTimer = setTimeout(camLoop, same ? 220 : 350);
   }
   function camLoop() {
     var v = $("scanvideo");
@@ -955,10 +957,14 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
     if (own && !own.primary) { flash("Ese código ya es un código adicional de «" + (own.p.name || own.p.code) + "».", true); return; }
     var ref = col.child(code);
     ref.once("value").then(function (snap) {
-      if (snap.exists()) return ref.update({ name: name || (snap.val() || {}).name || "", price: price });
-      return ref.set({ code: code, name: name, ar: "", price: price, order: Date.now() });
-    }).then(function () {
-      flash("Añadido ✓");
+      if (snap.exists()) {
+        var cur = snap.val() || {}, keepPrice = price === null && typeof cur.price === "number";
+        return ref.update({ name: name || cur.name || "", price: price !== null ? price : (typeof cur.price === "number" ? cur.price : null) })
+          .then(function () { return keepPrice ? "kept" : "upd"; });
+      }
+      return ref.set({ code: code, name: name, ar: "", price: price, order: Date.now() }).then(function () { return "new"; });
+    }).then(function (res) {
+      flash(res === "kept" ? "Ya existía: se mantuvo el precio anterior." : res === "upd" ? "Ya existía: actualizado ✓" : "Añadido ✓");
       $("addcode").value = ""; $("addname").value = ""; $("addprice").value = "";
     }, function (e) { flash("No se pudo añadir." + ecode(e), true); });
   }
