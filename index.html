@@ -339,6 +339,10 @@ body[data-tab="caja"] #loginpanel { display: none !important; }
       <button type="button" id="addbtn">Añadir</button>
     </div>
   </details>
+  <div class="row">
+    <button type="button" class="ghost" id="bkjson">Copia de seguridad (JSON)</button>
+    <button type="button" class="ghost" id="bkcsv">Exportar lista (CSV)</button>
+  </div>
   <input type="text" id="filter" placeholder="Filtrar por nombre o código..." autocomplete="off" aria-label="Filtrar productos">
   <div class="tools">
     <span class="count" id="count">...</span>
@@ -1044,6 +1048,31 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
   $("loginpass").addEventListener("keydown", function (e) { if (e.key === "Enter") doLogin(); });
   $("logoutbtn").addEventListener("click", function () { if (auth) auth.signOut(); });
   $("seedbtn").addEventListener("click", seedAll);
+
+  /* ---- copia de seguridad: JSON (datos tal cual en la base) y CSV (lista legible) ---- */
+  function downloadFile(name, text, type) {
+    var u = URL.createObjectURL(new Blob([text], { type: type })), a = document.createElement("a");
+    a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(u); }, 1500);
+  }
+  function stamp() { var d = new Date(), p = function (n) { return (n < 10 ? "0" : "") + n; }; return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()); }
+  $("bkjson").addEventListener("click", function () {
+    if (!col) { flash("No se puede guardar en esta vista.", true); return; }
+    col.once("value").then(function (snap) {
+      var data = snap.val() || {};
+      downloadFile("productos-" + stamp() + ".json", JSON.stringify({ exportado: new Date().toISOString(), productos: data }, null, 2), "application/json");
+      flash("Copia de seguridad descargada ✓");
+    }, function (e) { flash("No se pudo crear la copia." + ecode(e), true); });
+  });
+  $("bkcsv").addEventListener("click", function () {
+    var q = function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; };
+    var lines = [["Código", "Nombre", "Nombre árabe", "Precio (€)", "Otros códigos"].map(q).join(";")];
+    products.forEach(function (p) {
+      lines.push([q(p.code), q(p.name), q(p.ar), q(p.price !== null ? fmt(p.price) : ""), q((p.codes || []).join(" "))].join(";"));
+    });
+    downloadFile("productos-" + stamp() + ".csv", "\ufeff" + lines.join("\r\n"), "text/csv;charset=utf-8");
+    flash("Lista descargada ✓");
+  });
 
   $("filter").addEventListener("input", applyFilter);
   $("shot").addEventListener("change", function (e) { unlockAudio(); if (e.target.files && e.target.files[0]) scan(e.target.files[0]); e.target.value = ""; });
