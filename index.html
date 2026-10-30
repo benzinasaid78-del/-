@@ -56,9 +56,9 @@ main { max-width: 860px; margin: 0 auto; padding: 18px 16px 0; }
 }
 .panel h2 { margin: 0; font-size: 17px; font-weight: 600; text-wrap: balance; }
 .panel p { margin: 0; color: var(--muted); font-size: 14px; max-width: 70ch; }
-#setup { border-color: var(--warn); } #seedpanel, #pinpanel { border-inline-start: 4px solid var(--accent); }
+#setup { border-color: var(--warn); } #seedpanel, #loginpanel { border-inline-start: 4px solid var(--accent); }
 label { font-weight: 600; font-size: 14px; }
-input[type="text"] {
+input[type="text"], input[type="password"], input[type="email"] {
   width: 100%; direction: ltr; text-align: left; color: var(--fg); background: var(--bg);
   border: 1.5px solid var(--line); border-radius: 8px; padding: 10px 12px; font: 600 17px var(--font-name);
 }
@@ -188,6 +188,7 @@ body[data-tab="etiquetas"] .stage[data-view="etiquetas"] { display: grid; }
   .sheet:last-child { break-after: auto; }
 }
 pre.code { margin: 0; padding: 10px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; font: 500 13px/1.5 var(--font-ui); }
+body[data-tab="consulta"] #loginpanel { display: none !important; }
 [hidden] { display: none !important; }
 </style>
 </head>
@@ -200,6 +201,7 @@ pre.code { margin: 0; padding: 10px 12px; background: var(--bg); border: 1px sol
       <p>Consulta de precios e impresión de etiquetas</p>
     </div>
     <button type="button" id="installbtn" style="margin-inline-start:auto;background:var(--tag);color:#14202b">Instalar app</button>
+    <button type="button" id="logoutbtn" class="ghost" style="color:#fff;border-color:#4a5a69" hidden>Salir</button>
   </div>
 </header>
 <main>
@@ -214,20 +216,19 @@ pre.code { margin: 0; padding: 10px 12px; background: var(--bg); border: 1px sol
   "rules": {
     "products": {
       ".read": true,
-      ".write": true
+      ".write": "auth != null"
     }
   }
 }</pre>
 </div>
 
-<div class="panel" id="pinpanel" hidden>
-  <h2>Edición protegida con PIN</h2>
-  <p>La consulta de precios es abierta. Para editar productos e imprimir las hojas, introduce el PIN.</p>
-  <div class="row">
-    <input type="text" id="pin" inputmode="numeric" autocomplete="off" placeholder="••••" style="max-width:10em">
-    <button type="button" id="pinbtn">Entrar</button>
-  </div>
-  <div class="status err" id="pinerr"></div>
+<div class="panel" id="loginpanel" hidden>
+  <h2>Iniciar sesión para editar</h2>
+  <p>La consulta de precios es abierta. Para editar productos e imprimir las hojas, entra con tu correo y contraseña.</p>
+  <input type="email" id="loginemail" autocomplete="username" value="benzinasaid78@gmail.com" aria-label="Correo electrónico" dir="ltr">
+  <input type="password" id="loginpass" autocomplete="current-password" placeholder="Contraseña" aria-label="Contraseña" dir="ltr">
+  <div class="row"><button type="button" id="loginbtn">Entrar</button></div>
+  <div class="status err" id="loginerr"></div>
 </div>
 
 <div class="panel" id="seedpanel" hidden>
@@ -300,13 +301,15 @@ pre.code { margin: 0; padding: 10px 12px; background: var(--bg); border: 1px sol
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script>
 /* ====== Conexión: configuración de Firebase ====== */
 var FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDY9IYiwuk4fMrTkn8NywmPuw7Qlb3p0TY",
+  authDomain: "productos-del-locutorio.firebaseapp.com",
+  projectId: "productos-del-locutorio",
   databaseURL: "https://productos-del-locutorio-default-rtdb.europe-west1.firebasedatabase.app"
 };
-/* PIN para proteger la edición y la impresión. Déjalo vacío para quitar la protección. */
-var EDIT_PIN = "";
 var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور الشمر / النافع", "price": null, "order": 1}, {"code": "7411400100826", "name": "Producto Nicaraguense", "ar": "منتج نيكاراغوي", "price": null, "order": 2}, {"code": "8994963002879", "name": "Indomie Chicken Flavour", "ar": "إندومي بنكهة الدجاج", "price": null, "order": 3}, {"code": "8436029833398", "name": "Pastas Alimenticias", "ar": "معكرونة", "price": null, "order": 4}, {"code": "7702025114757", "name": "", "ar": "منتج بدون اسم", "price": null, "order": 5}, {"code": "832697001486", "name": "Frit Ravich Andean Natural Foods", "ar": "", "price": null, "order": 6}, {"code": "8437009069042", "name": "Maíz Canguil", "ar": "ذرة الفشار", "price": null, "order": 7}, {"code": "8123456789106", "name": "Palomitas", "ar": "فشار", "price": null, "order": 8}, {"code": "8410714102129", "name": "Azúcar Blanco y Nada Más", "ar": "سكر أبيض", "price": null, "order": 9}, {"code": "7707197046226", "name": "Pandebono Ingredion", "ar": "خليط بانديبونو", "price": null, "order": 10}, {"code": "7891095300631", "name": "Yoki Polvilho Doce", "ar": "نشا الذرة / البولفيلو", "price": null, "order": 11}, {"code": "8437009069219", "name": "Frijol Negro", "ar": "فاصوليا سوداء", "price": null, "order": 12}, {"code": "7707197040491", "name": "", "ar": "منتج بدون اسم", "price": null, "order": 13}, {"code": "8436048720037", "name": "", "ar": "منتج بدون اسم", "price": null, "order": 14}, {"code": "7861035520054", "name": "Hojuelas de Avena Quaker", "ar": "رقائق شوفان كويكر", "price": null, "order": 15}, {"code": "8437012146013", "name": "Frijol Rojo", "ar": "فاصوليا حمراء", "price": null, "order": 16}, {"code": "20796792", "name": "Sal Marina", "ar": "ملح بحري", "price": null, "order": 17}, {"code": "8436038771131", "name": "El Dorado Panelin", "ar": "عصير قصب السكر المجفف", "price": null, "order": 18}, {"code": "8434165614383", "name": "Cuétara Maria Oro", "ar": "بسكويت ماري", "price": null, "order": 19}, {"code": "879200001144", "name": "", "ar": "منتج بدون اسم", "price": null, "order": 20}, {"code": "8436038770578", "name": "El Dorado Panela", "ar": "بانيللا / عصير قصب السكر", "price": null, "order": 21}, {"code": "7702025185344", "name": "Macéo Galletas Noel", "ar": "", "price": null, "order": 22}, {"code": "7702025113132", "name": "Galletas Noel", "ar": "بسكويت نويل", "price": null, "order": 23}, {"code": "7702025186136", "name": "Galletas Noel", "ar": "بسكويت نويل", "price": null, "order": 24}, {"code": "7591002000547", "name": "Allofpan", "ar": "طحين الذرة", "price": null, "order": 25}, {"code": "6111249601068", "name": "Bled Conserves", "ar": "صلصة فلفل", "price": null, "order": 26}, {"code": "8412779500100", "name": "Grupo Leche Río Leche Entera", "ar": "حليب كامل الدسم", "price": null, "order": 27}, {"code": "24050142", "name": "Aldi Contigo Alubia Blanca Cocida Extra", "ar": "فاصوليا بيضاء مطبوخة", "price": null, "order": 28}, {"code": "8437014003017", "name": "", "ar": "منتج بدون اسم", "price": null, "order": 29}, {"code": "5102070910014", "name": "", "ar": "منتج بدون اسم", "price": null, "order": 30}, {"code": "7862100441724", "name": "Goya Red Habanero Pepper Hot Sauce", "ar": "صلصة هابانيرو حارة", "price": null, "order": 31}, {"code": "7752704109659", "name": "Kikkoman Soya Sauce", "ar": "صلصة الصويا", "price": null, "order": 32}, {"code": "7862100441731", "name": "Goya Hot Sauce", "ar": "صلصة حارة", "price": null, "order": 33}, {"code": "6111184001005", "name": "", "ar": "منتج بدون اسم", "price": null, "order": 34}, {"code": "6111184001036", "name": "", "ar": "منتج بدون اسم", "price": null, "order": 35}, {"code": "5410350310240", "name": "Aroma de Azahar", "ar": "ماء الزهر", "price": null, "order": 36}, {"code": "8436563431333", "name": "Papel Higiénico", "ar": "ورق صحي", "price": null, "order": 37}, {"code": "6959275562468", "name": "", "ar": "منتج بدون اسم", "price": null, "order": 38}, {"code": "5603318253813", "name": "Pomodoro Tomates", "ar": "طماطم", "price": null, "order": 39}, {"code": "8412164008105", "name": "Caldos del Norte Carne", "ar": "مرق بقر", "price": null, "order": 40}, {"code": "5603318253356", "name": "Tomates", "ar": "طماطم", "price": null, "order": 41}, {"code": "6977113300614", "name": "Aulad Khtira", "ar": "شعرية / معكرونة صينية", "price": null, "order": 42}, {"code": "044695003090", "name": "Semvra Facundo", "ar": "حليب / كريمة الكوكو", "price": null, "order": 43}, {"code": "8436555745530", "name": "Lenteja Roja Entera", "ar": "عدس أحمر كامل", "price": 2, "order": 44}, {"code": "8480010252958", "name": "Barritaa", "ar": "", "price": 20, "order": 1793306938451}];
 </script>
 <script>
@@ -668,21 +671,28 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
     try { localStorage.setItem("etq-products", JSON.stringify(products)); } catch (e) {}
     refresh();
   }
-  var db = null;
+  var db = null, auth = null, user = null, dbEmpty = false;
   function start() {
     if (!window.firebase || !FIREBASE_CONFIG.databaseURL) { $("setup").hidden = false; fallback("Conecta primero la base de datos."); return; }
     try {
       firebase.initializeApp(FIREBASE_CONFIG);
       db = firebase.database();
       col = db.ref("products");
+      if (firebase.auth && FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf("PEGA") !== 0) {
+        auth = firebase.auth();
+        auth.onAuthStateChanged(function (u) { user = u; applyLock(); if (u) renderSheets(); });
+      } else {
+        $("loginerr").textContent = "Falta la configuración de Firebase (apiKey) en el código.";
+      }
       col.orderByChild("order").on("value", onSnapServer, function () { $("setup").hidden = false; fallback("No se pudo conectar con la base de datos. Revisa Internet y las reglas."); });
     } catch (e) { fallback("No se pudo iniciar la base de datos."); }
   }
   function onSnapServer(snap) {
     $("setup").hidden = true;
     onSnap(snap);
-    $("seedpanel").hidden = snap.exists();
-    if (!$("seedpanel").hidden) $("seedcount").textContent = SEED.length + " productos listos para cargar";
+    dbEmpty = !snap.exists();
+    $("seedcount").textContent = SEED.length + " productos listos para cargar";
+    applyLock();
   }
   function seedAll() {
     if (!db) return;
@@ -697,17 +707,27 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
     $("count").textContent = "";
   }
 
-  /* ---- optional PIN lock for editing ---- */
-  function unlocked() { try { return sessionStorage.getItem("pinok") === "1"; } catch (e) { return false; } }
+  /* ---- edición protegida con inicio de sesión (Firebase Authentication) ---- */
   function applyLock() {
-    var lock = !!EDIT_PIN && !unlocked();
+    var lock = !user;
     document.querySelectorAll(".locked").forEach(function (el) { el.hidden = lock; });
-    $("pinpanel").hidden = !lock;
+    $("loginpanel").hidden = !lock;
+    $("logoutbtn").hidden = lock;
+    $("seedpanel").hidden = !(user && dbEmpty);
   }
-  $("pinbtn").addEventListener("click", function () {
-    if ($("pin").value === EDIT_PIN) { try { sessionStorage.setItem("pinok", "1"); } catch (e) {} $("pinerr").textContent = ""; applyLock(); renderSheets(); }
-    else $("pinerr").textContent = "PIN incorrecto.";
-  });
+  function doLogin() {
+    var err = $("loginerr");
+    if (!auth) { err.textContent = "Falta la configuración de Firebase (apiKey) en el código."; return; }
+    err.textContent = "";
+    auth.signInWithEmailAndPassword($("loginemail").value.trim(), $("loginpass").value).then(function () {
+      $("loginpass").value = "";
+    }, function (e) {
+      err.textContent = e && e.code === "auth/network-request-failed" ? "Sin conexión a Internet." : "Correo o contraseña incorrectos.";
+    });
+  }
+  $("loginbtn").addEventListener("click", doLogin);
+  $("loginpass").addEventListener("keydown", function (e) { if (e.key === "Enter") doLogin(); });
+  $("logoutbtn").addEventListener("click", function () { if (auth) auth.signOut(); });
   $("seedbtn").addEventListener("click", seedAll);
 
   $("q").addEventListener("input", lookup);
