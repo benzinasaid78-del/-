@@ -1174,9 +1174,18 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
     var total = cartCents(), n = lines.reduce(function (t, l) { return t + l.qty; }, 0);
     askConfirm("¿Finalizar la venta?", nArt(n) + " · " + eur(total), "Sí, cobrar", function () {
       var rec = { t: total, n: n, ts: Date.now(), l: lines.map(function (l) { var p = byId(l.id); return { c: p.code, n: p.name || "", q: l.qty, p: Math.round((p.price || 0) * 100) }; }) };
-      db.ref("sales/" + stamp()).push().set(rec).catch(function (e) { $("cartmsg").textContent = "No se pudo registrar la venta." + ecode(e); });
-      cart = []; renderCart(); beep(true);
-      $("cartmsg").textContent = ""; $("scanmsg").textContent = "Venta registrada ✓ " + eur(total);
+      var old = cart, done = false;
+      cart = []; renderCart();
+      $("cartmsg").textContent = ""; $("scanmsg").textContent = "Guardando venta…";
+      setTimeout(function () { if (!done) $("scanmsg").textContent = "Sin conexión: la venta se enviará al volver Internet."; }, 4000);
+      db.ref("sales/" + stamp()).push().set(rec).then(function () {
+        done = true; beep(true); $("scanmsg").textContent = "Venta registrada ✓ " + eur(total);
+      }, function (e) {
+        done = true; beep(false); $("scanmsg").textContent = "";
+        old.forEach(function (b) { var l = cart.filter(function (x) { return x.id === b.id; })[0]; if (l) l.qty += b.qty; else cart.push(b); });
+        renderCart();
+        $("cartmsg").textContent = "NO se registró la venta. La compra sigue en la lista." + ecode(e);
+      });
     });
     $("cfyes").classList.add("ok");
   }
