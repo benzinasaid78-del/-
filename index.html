@@ -102,6 +102,14 @@ button.danger { background: var(--warn-bg); color: var(--warn); }
 .meta { display: grid; gap: 0; min-width: 0; flex: 1 1 8em; }
 .in-code { font: 500 14px var(--font-ui); letter-spacing: .06em; padding: 6px 8px; color: var(--muted); }
 .meta .code { direction: ltr; text-align: left; font: 500 13px var(--font-ui); letter-spacing: .06em; color: var(--muted); }
+.extras { display: grid; gap: 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; direction: ltr; background: var(--bg); border: 1px solid var(--line); border-radius: 99px; padding: 2px 4px 2px 10px; font: 500 13px var(--font-ui); letter-spacing: .05em; color: var(--muted); }
+.chip.bad { border-color: var(--warn); }
+.chipx { padding: 0 8px; min-height: 0; line-height: 1.6; font-size: 13px; background: transparent; color: var(--muted); border: 0; }
+.addx { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.addx input { flex: 1 1 10em; font: 500 14px var(--font-ui); letter-spacing: .05em; direction: ltr; }
+.xopen { justify-self: start; padding: 4px 12px; font-size: 13px; }
 .pill { font-size: 12px; font-weight: 600; border-radius: 99px; padding: 1px 10px; background: var(--warn-bg); color: var(--warn); white-space: nowrap; }
 .pills { display: flex; flex-wrap: wrap; gap: 6px; }
 .item .del { padding: 6px 12px; font-size: 13px; }
@@ -526,9 +534,24 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
       .then(function () { flash("Guardado ✓"); }, function (e) { flash(("No se pudo guardar. Inténtalo de nuevo." + ecode(e)), true); });
   }
   function byId(id) { return products.filter(function (p) { return p.id === id; })[0]; }
+  function allCodes(p) { return [p.code].concat(p.codes || []); }
+  /* ¿qué producto ya usa este código (como principal o adicional)? */
+  function findOwner(code, exceptId) {
+    var cq = canon(code);
+    for (var i = 0; i < products.length; i++) {
+      var q = products[i];
+      if (q.id === exceptId) continue;
+      if (q.code === code || canon(q.code) === cq) return { p: q, primary: true };
+      var ex = q.codes || [];
+      for (var j = 0; j < ex.length; j++) if (ex[j] === code || canon(ex[j]) === cq) return { p: q, primary: false };
+    }
+    return null;
+  }
 
   /* El código es la clave del producto en la base de datos: cambiarlo = mover el registro a la clave nueva (en una sola operación). */
   function changeCode(oldId, newCode, input, oldCode) {
+    var own = findOwner(newCode, oldId);
+    if (own && !own.primary) { flash("Ese código ya es un código adicional de «" + (own.p.name || own.p.code) + "».", true); input.value = oldCode; return; }
     col.child(newCode).once("value").then(function (snap) {
       if (snap.exists()) { flash("Ya existe un producto con ese código.", true); input.value = oldCode; return; }
       return col.child(oldId).once("value").then(function (old) {
@@ -540,16 +563,45 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
   }
   var cfAction = null;
   function closeConfirm() { cfAction = null; $("confirmbox").hidden = true; }
-  function confirmDelete(p, action) {
-    $("cftext").textContent = (p.name || "(sin nombre)") + " · " + p.code + (p.price !== null ? " · " + fmt(p.price) + " €" : "") + ". Esta acción no se puede deshacer.";
+  function askConfirm(title, text, yes, action) {
+    $("cftitle").textContent = title; $("cftext").textContent = text; $("cfyes").textContent = yes;
     cfAction = action;
     $("confirmbox").hidden = false;
     $("cfno").focus();
+  }
+  function confirmDelete(p, action) {
+    askConfirm("¿Eliminar este producto?", (p.name || "(sin nombre)") + " · " + p.code + (p.price !== null ? " · " + fmt(p.price) + " €" : "") + ". Esta acción no se puede deshacer.", "Sí, eliminar", action);
   }
   $("cfno").addEventListener("click", closeConfirm);
   $("cfyes").addEventListener("click", function () { var a = cfAction; closeConfirm(); if (a) a(); });
   $("confirmbox").addEventListener("click", function (e) { if (e.target === this) closeConfirm(); });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !$("confirmbox").hidden) closeConfirm(); });
+  /* códigos adicionales: otras variedades (sabores…) con el mismo nombre y precio */
+  function addExtra(id, code, done) {
+    var cur = byId(id);
+    if (!cur) return;
+    if (!/^\d{6,14}$/.test(code)) { flash("Escribe el código de barras solo con números.", true); return; }
+    if (!col) { flash("No se puede guardar en esta vista.", true); return; }
+    if (canon(code) === canon(cur.code) || (cur.codes || []).some(function (c) { return canon(c) === canon(code); })) { flash("Ese código ya está en este producto.", true); return; }
+    var own = findOwner(code, id);
+    if (own && !own.primary) { flash("Ese código ya pertenece a «" + (own.p.name || own.p.code) + "».", true); return; }
+    if (own) {
+      /* el código ya existe como producto aparte: ofrecer unirlo */
+      var o = own.p;
+      askConfirm("¿Unir con este producto?", "«" + (o.name || o.code) + "» (" + o.code + ") pasará a ser un código adicional de «" + (cur.name || cur.code) + "» y se eliminará como producto aparte.", "Sí, unir", function () {
+        var upd = {};
+        upd[id + "/codes/" + o.code] = true;
+        (o.codes || []).forEach(function (c) { upd[id + "/codes/" + c] = true; });
+        upd[o.id] = null;
+        col.update(upd).then(function () { flash("Unidos ✓"); if (done) done(); }, function (e) { flash("No se pudo unir." + ecode(e), true); });
+      });
+      return;
+    }
+    col.child(id).child("codes").child(code).set(true).then(function () {
+      flash(validCode(code) ? "Código añadido ✓" : "Añadido, pero revisa el código (no parece válido)");
+      if (done) done();
+    }, function (e) { flash("No se pudo añadir." + ecode(e), true); });
+  }
   function createRow(p) {
     var el = document.createElement("div");
     el.className = "item"; el.dataset.id = p.id;
@@ -560,6 +612,11 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
         '<div class="meta"><input type="text" class="in-code" inputmode="numeric" autocomplete="off" aria-label="Código de barras"></div>' +
         '<div class="pills"></div>' +
         '<button type="button" class="ghost del">Eliminar</button>' +
+      '</div>' +
+      '<div class="extras">' +
+        '<div class="chips"></div>' +
+        '<div class="addx" hidden><input type="text" class="in-xcode" inputmode="numeric" autocomplete="off" placeholder="Código de la otra variedad" aria-label="Otro código de barras"><button type="button" class="xok">Añadir</button><button type="button" class="ghost xno">Cancelar</button></div>' +
+        '<button type="button" class="ghost xopen">+ Otro código de barras</button>' +
       '</div>';
     var nameIn = el.querySelector(".in-name"), priceIn = el.querySelector(".in-price"), del = el.querySelector(".del");
     nameIn.addEventListener("change", function () { save(p.id, { name: nameIn.value.trim() }); });
@@ -576,6 +633,25 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
       if (!/^\d{6,14}$/.test(nc)) { flash("El código debe tener solo números (de 6 a 14).", true); codeIn.value = cur.code; return; }
       if (!col) { flash("No se puede guardar en esta vista.", true); codeIn.value = cur.code; return; }
       changeCode(p.id, nc, codeIn, cur.code);
+    });
+    var addx = el.querySelector(".addx"), xin = el.querySelector(".in-xcode"), xopen = el.querySelector(".xopen");
+    function closeX() { addx.hidden = true; xopen.hidden = false; xin.value = ""; }
+    xopen.addEventListener("click", function () {
+      xopen.hidden = true; addx.hidden = false;
+      var q = $("q").value.replace(/\s+/g, "");
+      xin.value = /^\d{6,14}$/.test(q) && !findOwner(q) ? q : "";
+      xin.focus();
+    });
+    el.querySelector(".xno").addEventListener("click", closeX);
+    el.querySelector(".xok").addEventListener("click", function () { addExtra(p.id, xin.value.replace(/\s+/g, ""), closeX); });
+    xin.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); addExtra(p.id, xin.value.replace(/\s+/g, ""), closeX); } });
+    el.querySelector(".chips").addEventListener("click", function (e) {
+      var b = e.target.closest(".chipx"); if (!b) return;
+      var code = b.getAttribute("data-code"), cur = byId(p.id) || p;
+      askConfirm("¿Quitar este código?", code + " dejará de identificar a «" + (cur.name || cur.code) + "». El producto no se elimina.", "Sí, quitar", function () {
+        if (!col) return;
+        col.child(p.id).child("codes").child(code).remove().then(function () { flash("Código quitado"); }, function (err) { flash("No se pudo quitar." + ecode(err), true); });
+      });
     });
     del.addEventListener("click", function () {
       var cur = byId(p.id) || p;
@@ -597,6 +673,13 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
     if (!p.name) pills.push("Sin nombre");
     if (p.price === null) pills.push("Sin precio");
     if (!validCode(p.code)) pills.push("Revisa el código de barras");
+    var key = (p.codes || []).join(",");
+    if (el._ck !== key) {
+      el._ck = key;
+      el.querySelector(".chips").innerHTML = (p.codes || []).map(function (c) {
+        return '<span class="chip' + (validCode(c) ? "" : " bad") + '"><span>' + esc(c) + (validCode(c) ? "" : " ⚠") + '</span><button type="button" class="chipx" data-code="' + esc(c) + '" aria-label="Quitar código ' + esc(c) + '">✕</button></span>';
+      }).join("");
+    }
     el.querySelector(".pills").innerHTML = pills.map(function (t) { return '<span class="pill">' + t + '</span>'; }).join("");
     el.classList.toggle("complete", !!p.name && p.price !== null && validCode(p.code));
   }
@@ -622,7 +705,7 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
     var q = norm($("filter").value.trim());
     products.forEach(function (p) {
       var el = rows.get(p.id);
-      if (el) el.hidden = !!q && norm(p.name).indexOf(q) === -1 && p.code.indexOf(q) === -1;
+      if (el) el.hidden = !!q && norm(p.name).indexOf(q) === -1 && !allCodes(p).some(function (c) { return c.indexOf(q) !== -1; });
     });
   }
   function renderCount() {
@@ -638,11 +721,12 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
   function lookup() {
     var q = $("q").value.trim(), box = $("result");
     if (!q) { box.className = "result idle"; box.textContent = "Escribe el código o el nombre, o escanea el código de barras."; return; }
-    var digits = q.replace(/\s+/g, ""), hit = null;
+    var digits = q.replace(/\s+/g, ""), hit = null, shown = null;
     if (/^\d{4,}$/.test(digits)) {
       var cq = canon(digits);
-      hit = products.filter(function (p) { return p.code === digits || canon(p.code) === cq; })[0] ||
-            products.filter(function (p) { return p.code.slice(-digits.length) === digits; })[0];
+      hit = products.filter(function (p) { return allCodes(p).some(function (c) { return c === digits || canon(c) === cq; }); })[0] ||
+            products.filter(function (p) { return allCodes(p).some(function (c) { return c.slice(-digits.length) === digits; }); })[0];
+      if (hit) shown = allCodes(hit).filter(function (c) { return c === digits || canon(c) === cq; })[0] || allCodes(hit).filter(function (c) { return c.slice(-digits.length) === digits; })[0] || hit.code;
     }
     if (!hit) {
       var nq = norm(q);
@@ -652,7 +736,7 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
     box.className = "result";
     box.innerHTML = '<div class="r-name">' + esc(hit.name || "(sin nombre)") + '</div>' +
       (hit.price !== null ? '<div class="r-price">' + fmt(hit.price) + '<i>€</i></div>' : '<div class="r-ar" style="color:var(--warn)">Precio aún sin introducir</div>') +
-      '<div class="r-code">' + esc(hit.code) + '</div>';
+      '<div class="r-code">' + esc(shown || hit.code) + '</div>';
   }
 
   /* ---- read a barcode from a photo ---- */
@@ -772,6 +856,8 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
     if (!/^\d{6,14}$/.test(code)) { flash("Escribe el código de barras solo con números.", true); return; }
     if (price !== null && isNaN(price)) { flash("Precio no válido. Ejemplo: 8 o 3,50", true); return; }
     if (!col) { flash("No se puede guardar en esta vista.", true); return; }
+    var own = findOwner(code);
+    if (own && !own.primary) { flash("Ese código ya es un código adicional de «" + (own.p.name || own.p.code) + "».", true); return; }
     var ref = col.child(code);
     ref.once("value").then(function (snap) {
       if (snap.exists()) return ref.update({ name: name || (snap.val() || {}).name || "", price: price });
@@ -793,7 +879,8 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
     products = [];
     snap.forEach(function (d) {
       var x = d.val() || {};
-      products.push({ id: d.key, code: String(x.code || d.key), name: String(x.name || ""), ar: String(x.ar || ""), price: typeof x.price === "number" ? x.price : null });
+      products.push({ id: d.key, code: String(x.code || d.key), name: String(x.name || ""), ar: String(x.ar || ""), price: typeof x.price === "number" ? x.price : null,
+        codes: x.codes && typeof x.codes === "object" ? Object.keys(x.codes).filter(function (k) { return x.codes[k] && k !== String(x.code || d.key); }) : [] });
     });
     try { localStorage.setItem("etq-products", JSON.stringify(products)); } catch (e) {}
     refresh();
