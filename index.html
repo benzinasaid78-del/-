@@ -15,7 +15,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Etiquetas Locutorio</title>
 
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,600;1,700&display=swap">
 <style>
 /* Layout: lookup panel, editable product list (saved in db), then A4 sheet(s) of 60x38mm labels with dashed cut lines */
 :root {
@@ -178,6 +178,43 @@ body[data-tab="etiquetas"] .stage[data-view="etiquetas"] { display: grid; }
 .sizegrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5em, 1fr)); gap: 10px; }
 .sizegrid label { display: grid; gap: 4px; font-weight: 600; font-size: 13px; }
 
+
+.sheet, .pv { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+/* ---- estilo 8: minimalista ---- */
+.st-min .tag-name { background: transparent; color: var(--ink); border-bottom: 0.35mm solid var(--ink); margin: 0 calc(2.2mm * var(--k)); padding: 0; }
+.st-min .tag-foot { border-top: 0; }
+/* ---- estilo 9: fondo oscuro ---- */
+.st-dark .tag-in { grid-template-rows: calc(10.5mm * var(--k)) minmax(0, 1fr) auto; }
+.st-dark .tag-name { background: #1c1c1c; position: relative; padding-bottom: calc(2.4mm * var(--k)); font-size: calc(3.5mm * var(--k)); }
+.st-dark .tag-name::after { content: ""; position: absolute; left: calc(2.2mm * var(--k)); width: 42%; bottom: calc(1.3mm * var(--k)); height: calc(.9mm * var(--k)); background: var(--tag); border-radius: calc(.5mm * var(--k)); }
+.st-dark .tag-foot { border-top: 0; }
+/* ---- estilo 10: pizarra ---- */
+.st-chalk .tag-in { background: #1b1b1b; border: calc(.9mm * var(--k)) solid var(--tag); }
+.st-chalk .tag-name { background: transparent; font-style: italic; position: relative; padding-bottom: calc(1.8mm * var(--k)); }
+.st-chalk .tag-name::after { content: ""; position: absolute; left: calc(2.2mm * var(--k)); width: 72%; bottom: calc(1mm * var(--k)); height: calc(.8mm * var(--k)); background: var(--tag); border-radius: 1mm; transform: rotate(-1.2deg); }
+.st-chalk .tag-price, .st-chalk .tag-price b, .st-chalk .tag-price i { color: #fff; font-style: italic; }
+.st-chalk .tag-foot { border-top: 0; color: #fff; }
+.st-chalk .bar { background: #fff; color: var(--ink); padding: calc(.7mm * var(--k)) calc(1mm * var(--k)) calc(.5mm * var(--k)); border-radius: calc(.8mm * var(--k)); }
+/* ---- estilo 6: diseño lateral ---- */
+.st-side .tag-in { display: block; position: relative; }
+.st-side .s-stripe { position: absolute; left: 0; top: 0; bottom: 0; width: 56%; background: var(--tag); clip-path: polygon(0 0, 100% 0, 88% 100%, 0 100%); }
+.st-side .s-left { position: absolute; left: 0; top: 0; bottom: 0; width: 56%; background: var(--ink); color: #fff; clip-path: polygon(0 0, 96% 0, 83% 100%, 0 100%); display: flex; flex-direction: column; justify-content: space-between; padding: calc(2.2mm * var(--k)) calc(6.5mm * var(--k)) calc(2mm * var(--k)) calc(2.2mm * var(--k)); }
+.st-side .s-name { font-family: var(--font-name); font-weight: 600; font-size: calc(3.1mm * var(--k)); line-height: 1.1; text-transform: uppercase; letter-spacing: .01em; }
+.st-side .s-name span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.st-side .s-line { display: block; width: calc(9mm * var(--k)); height: calc(.8mm * var(--k)); background: var(--tag); margin-top: calc(1.2mm * var(--k)); }
+.st-side .s-left small { font-family: var(--font-name); font-size: calc(2.5mm * var(--k)); line-height: 1.15; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.st-side .s-right { position: absolute; right: 0; top: 0; bottom: 0; width: 50%; display: grid; grid-template-rows: minmax(0, 1fr) auto; padding: 0 calc(1.5mm * var(--k)) calc(1.2mm * var(--k)) calc(2mm * var(--k)); }
+.st-side .tag-price b { font-size: calc(9.5mm * var(--k)); }
+.st-side .tag-price i { font-size: calc(5.5mm * var(--k)); margin-top: calc(-2mm * var(--k)); }
+.st-side .tag-price.long b { font-size: calc(7.6mm * var(--k)); }
+.st-side .tag-price.vlong b { font-size: calc(6.2mm * var(--k)); }
+.st-side .bar svg { width: calc(24mm * var(--k)); }
+/* ---- selector de estilo ---- */
+.styles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.stylebtn { background: var(--bg); color: var(--fg); border: 2px solid var(--line); border-radius: 10px; padding: 8px 6px; display: grid; gap: 6px; justify-items: center; }
+.stylebtn[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.pv { --w: 60mm; --h: 38mm; --k: 1; display: grid; grid-template-columns: var(--w); grid-template-rows: var(--h); zoom: .5; direction: ltr; background: #fff; pointer-events: none; }
+
 @page { size: A4; margin: 0; }
 @media print {
   html, body { background: #fff !important; padding: 0 !important; }
@@ -281,6 +318,8 @@ body[data-tab="consulta"] #loginpanel { display: none !important; }
 <div class="panel locked" id="sheetpanel" data-view="etiquetas">
   <h2>Hojas de etiquetas</h2>
   <p id="sheetinfo">...</p>
+  <label id="styles-label">Estilo de etiqueta</label>
+  <div class="styles" id="styles" role="radiogroup" aria-labelledby="styles-label"></div>
   <div class="sizegrid">
     <label>Ancho (mm)<input type="text" id="sz-w" inputmode="decimal" autocomplete="off"></label>
     <label>Alto (mm)<input type="text" id="sz-h" inputmode="decimal" autocomplete="off"></label>
@@ -395,22 +434,49 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
   }
 
   /* ---- labels ---- */
-  function tag(p) {
-    var svg = barcodeSvg(p.code);
-    return '<div class="tag"><div class="tag-in">' +
-      '<div class="tag-name"><span>' + esc(p.name) + '</span></div>' +
-      '<div class="tag-price"><b>' + fmt(p.price) + '</b><i>€</i></div>' +
-      '<div class="tag-foot"><small>PVP<br>IVA incl.</small>' +
-      '<div class="bar">' + svg + '<span>' + esc(p.code) + '</span></div></div>' +
+  var STYLES = [["min", "Minimalista"], ["dark", "Fondo oscuro"], ["chalk", "Pizarra"], ["side", "Diseño lateral"]];
+  var lblStyle = loadStyle();
+  function loadStyle() {
+    try { var v = localStorage.getItem("etq-style"); if (STYLES.some(function (x) { return x[0] === v; })) return v; } catch (e) {}
+    return "min";
+  }
+  function priceHtml(p) {
+    var t = fmt(p.price), c = t.length >= 6 ? " vlong" : (t.length >= 5 ? " long" : "");
+    return '<div class="tag-price' + c + '"><b>' + t + '</b><i>€</i></div>';
+  }
+  function tag(p, st) {
+    st = st || lblStyle;
+    var bar = '<div class="bar">' + barcodeSvg(p.code) + '<span>' + esc(p.code) + '</span></div>';
+    var nm = esc(p.name), pr = priceHtml(p);
+    if (st === "side") {
+      return '<div class="tag st-side"><div class="tag-in"><i class="s-stripe"></i>' +
+        '<div class="s-left"><div><div class="s-name"><span>' + nm + '</span></div><i class="s-line"></i></div><small>PVP<br>IVA incl.</small></div>' +
+        '<div class="s-right">' + pr + bar + '</div></div></div>';
+    }
+    return '<div class="tag st-' + st + '"><div class="tag-in">' +
+      '<div class="tag-name"><span>' + nm + '</span></div>' + pr +
+      '<div class="tag-foot"><small>PVP<br>IVA incl.</small>' + bar + '</div>' +
       '</div></div>';
   }
+  function renderStyles() {
+    var sample = { name: "Dunal Granadina 1L", price: 8, code: "8436611270006" };
+    $("styles").innerHTML = STYLES.map(function (s) {
+      return '<button type="button" class="stylebtn" role="radio" aria-checked="' + (s[0] === lblStyle) + '" data-style="' + s[0] + '"><div class="pv">' + tag(sample, s[0]) + '</div><span>' + s[1] + '</span></button>';
+    }).join("");
+  }
+  $("styles").addEventListener("click", function (e) {
+    var b = e.target.closest(".stylebtn"); if (!b) return;
+    lblStyle = b.getAttribute("data-style");
+    try { localStorage.setItem("etq-style", lblStyle); } catch (x) {}
+    renderStyles(); renderSheets();
+  });
   function renderSheets() {
     var ready = products.filter(function (p) { return p.name && p.price !== null; });
     var html = "";
     var L = layout();
     var st = "--w:" + size.w + "mm;--h:" + size.h + "mm;--k:" + L.k + ";--cols:" + L.cols + ";--rows:" + L.rows + ";--top:" + size.top + "mm";
     for (var i = 0; i < ready.length; i += L.per) {
-      html += '<div class="fit"><div class="sheet" style="' + st + '">' + ready.slice(i, i + L.per).map(tag).join("") + '</div></div>';
+      html += '<div class="fit"><div class="sheet" style="' + st + '">' + ready.slice(i, i + L.per).map(function (p) { return tag(p); }).join("") + '</div></div>';
     }
     $("sz-info").textContent = L.cols + " columnas × " + L.rows + " filas = " + L.per + " etiquetas por hoja";
     $("sheetnote").textContent = "Para imprimir: pulsa «Imprimir etiquetas», elige tamaño A4 y escala 100 %. Cada hoja tiene " + L.per + " etiquetas de " + size.w + "×" + size.h + " mm que se recortan por las líneas discontinuas.";
@@ -799,6 +865,7 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
   $("sz-reset").addEventListener("click", function () { size = { w: DEF_SIZE.w, h: DEF_SIZE.h, top: DEF_SIZE.top }; try { localStorage.removeItem("etq-size"); } catch (e) {} showSize(); $("sz-msg").textContent = ""; renderSheets(); });
   showSize();
   applyLock();
+  renderStyles();
   renderSheets();
   start();
 })();
