@@ -100,6 +100,7 @@ button.danger { background: var(--warn-bg); color: var(--warn); }
 .pricebox input { width: 7.5em; font: 700 22px var(--font-price); text-align: center; padding: 6px 8px; background: var(--tag); color: var(--tag-fg); border-color: transparent; border-radius: 6px; }
 .pricebox span { font: 700 20px var(--font-price); }
 .meta { display: grid; gap: 0; min-width: 0; flex: 1 1 8em; }
+.in-code { font: 500 14px var(--font-ui); letter-spacing: .06em; padding: 6px 8px; color: var(--muted); }
 .meta .code { direction: ltr; text-align: left; font: 500 13px var(--font-ui); letter-spacing: .06em; color: var(--muted); }
 .pill { font-size: 12px; font-weight: 600; border-radius: 99px; padding: 1px 10px; background: var(--warn-bg); color: var(--warn); white-space: nowrap; }
 .pills { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -188,6 +189,13 @@ body[data-tab="etiquetas"] .stage[data-view="etiquetas"] { display: grid; }
   .sheet:last-child { break-after: auto; }
 }
 pre.code { margin: 0; padding: 10px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; font: 500 13px/1.5 var(--font-ui); }
+#confirmbox { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.6); display: grid; place-items: center; padding: 16px; }
+.cfcard { background: var(--panel); color: var(--fg); border-radius: 12px; padding: 20px; max-width: 420px; width: 100%; display: grid; gap: 12px; box-shadow: 0 8px 30px rgba(0,0,0,.4); }
+.cfcard h2 { margin: 0; font-size: 18px; }
+.cfcard p { margin: 0; color: var(--fg); overflow-wrap: anywhere; }
+.cfcard .row { justify-content: flex-end; }
+button.cfyes { background: var(--warn); color: #fff; }
+@media print { #confirmbox { display: none !important; } }
 body[data-tab="consulta"] #loginpanel { display: none !important; }
 [hidden] { display: none !important; }
 </style>
@@ -292,6 +300,13 @@ body[data-tab="consulta"] #loginpanel { display: none !important; }
   <div class="scanframe" aria-hidden="true"></div>
   <p id="scanhint">Apunta al código de barras</p>
   <button type="button" id="scanclose">Cerrar</button>
+</div>
+<div id="confirmbox" role="alertdialog" aria-modal="true" aria-labelledby="cftitle" hidden>
+  <div class="cfcard">
+    <h2 id="cftitle">¿Eliminar este producto?</h2>
+    <p id="cftext"></p>
+    <div class="row"><button type="button" class="ghost" id="cfno">Cancelar</button><button type="button" class="cfyes" id="cfyes">Sí, eliminar</button></div>
+  </div>
 </div>
 <nav class="nav" aria-label="Secciones">
   <a href="#consulta" data-go="consulta"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l6 6"/></svg><span>Consulta</span></a>
@@ -419,20 +434,44 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
     if (!/^\d+(\.\d{1,2})?$/.test(t)) return NaN;
     return Math.round(parseFloat(t) * 100) / 100;
   }
+  function ecode(e) { return e && e.code ? " [" + e.code + "]" : ""; }
   function flash(text, err) {
     var s = $("status");
     s.textContent = text; s.className = "status" + (err ? " err" : "");
     clearTimeout(flash.t);
-    flash.t = setTimeout(function () { s.textContent = ""; }, 2500);
+    flash.t = setTimeout(function () { s.textContent = ""; }, err ? 8000 : 2500);
   }
   function save(id, patch) {
     if (!col) { flash("No se puede guardar en esta vista.", true); return; }
     var prev = chain[id] || Promise.resolve();
     chain[id] = prev.then(function () { return col.child(id).update(patch); })
-      .then(function () { flash("Guardado ✓"); }, function () { flash("No se pudo guardar. Inténtalo de nuevo.", true); });
+      .then(function () { flash("Guardado ✓"); }, function (e) { flash(("No se pudo guardar. Inténtalo de nuevo." + ecode(e)), true); });
   }
   function byId(id) { return products.filter(function (p) { return p.id === id; })[0]; }
 
+  /* El código es la clave del producto en la base de datos: cambiarlo = mover el registro a la clave nueva (en una sola operación). */
+  function changeCode(oldId, newCode, input, oldCode) {
+    col.child(newCode).once("value").then(function (snap) {
+      if (snap.exists()) { flash("Ya existe un producto con ese código.", true); input.value = oldCode; return; }
+      return col.child(oldId).once("value").then(function (old) {
+        var v = old.val() || {}; v.code = newCode;
+        var upd = {}; upd[oldId] = null; upd[newCode] = v;
+        return col.update(upd).then(function () { flash("Código cambiado ✓"); });
+      });
+    }).catch(function (e) { flash("No se pudo cambiar el código." + ecode(e), true); input.value = oldCode; });
+  }
+  var cfAction = null;
+  function closeConfirm() { cfAction = null; $("confirmbox").hidden = true; }
+  function confirmDelete(p, action) {
+    $("cftext").textContent = (p.name || "(sin nombre)") + " · " + p.code + (p.price !== null ? " · " + fmt(p.price) + " €" : "") + ". Esta acción no se puede deshacer.";
+    cfAction = action;
+    $("confirmbox").hidden = false;
+    $("cfno").focus();
+  }
+  $("cfno").addEventListener("click", closeConfirm);
+  $("cfyes").addEventListener("click", function () { var a = cfAction; closeConfirm(); if (a) a(); });
+  $("confirmbox").addEventListener("click", function (e) { if (e.target === this) closeConfirm(); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !$("confirmbox").hidden) closeConfirm(); });
   function createRow(p) {
     var el = document.createElement("div");
     el.className = "item"; el.dataset.id = p.id;
@@ -440,7 +479,7 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
       '<input type="text" class="in-name" placeholder="Nombre del producto" autocomplete="off" autocapitalize="words" aria-label="Nombre del producto">' +
       '<div class="item-2">' +
         '<div class="pricebox"><input type="text" class="in-price" inputmode="decimal" placeholder="0,00" autocomplete="off" aria-label="Precio"><span>€</span></div>' +
-        '<div class="meta"><span class="code"></span></div>' +
+        '<div class="meta"><input type="text" class="in-code" inputmode="numeric" autocomplete="off" aria-label="Código de barras"></div>' +
         '<div class="pills"></div>' +
         '<button type="button" class="ghost del">Eliminar</button>' +
       '</div>';
@@ -451,15 +490,21 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
       if (v !== null && isNaN(v)) { flash("Precio no válido. Ejemplo: 8 o 3,50", true); var cur = byId(p.id); priceIn.value = cur && cur.price !== null ? fmt(cur.price) : ""; return; }
       save(p.id, { price: v });
     });
-    var armed = null;
+    var codeIn = el.querySelector(".in-code");
+    codeIn.addEventListener("change", function () {
+      var cur = byId(p.id), nc = codeIn.value.replace(/\s+/g, "");
+      if (!cur) return;
+      if (nc === cur.code) { codeIn.value = cur.code; return; }
+      if (!/^\d{6,14}$/.test(nc)) { flash("El código debe tener solo números (de 6 a 14).", true); codeIn.value = cur.code; return; }
+      if (!col) { flash("No se puede guardar en esta vista.", true); codeIn.value = cur.code; return; }
+      changeCode(p.id, nc, codeIn, cur.code);
+    });
     del.addEventListener("click", function () {
-      if (!armed) {
-        del.textContent = "Confirmar"; del.className = "danger del";
-        armed = setTimeout(function () { armed = null; del.textContent = "Eliminar"; del.className = "ghost del"; }, 3500);
-        return;
-      }
-      clearTimeout(armed); armed = null;
-      if (col) col.child(p.id).remove().then(function () { flash("Eliminado"); }, function () { flash("No se pudo eliminar.", true); });
+      var cur = byId(p.id) || p;
+      confirmDelete(cur, function () {
+        if (!col) return;
+        col.child(p.id).remove().then(function () { flash("Eliminado"); }, function (e) { flash("No se pudo eliminar." + ecode(e), true); });
+      });
     });
     return el;
   }
@@ -468,8 +513,8 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
     if (document.activeElement !== nameIn && nameIn.value !== p.name) nameIn.value = p.name;
     var pv = p.price !== null ? fmt(p.price) : "";
     if (document.activeElement !== priceIn && priceIn.value !== pv) priceIn.value = pv;
-    var codeEl = el.querySelector(".code");
-    codeEl.textContent = p.code + (validCode(p.code) ? "" : "  ⚠");
+    var codeIn = el.querySelector(".in-code");
+    if (document.activeElement !== codeIn && codeIn.value !== p.code) codeIn.value = p.code;
     var pills = [];
     if (!p.name) pills.push("Sin nombre");
     if (p.price === null) pills.push("Sin precio");
@@ -656,7 +701,7 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
     }).then(function () {
       flash("Añadido ✓");
       $("addcode").value = ""; $("addname").value = ""; $("addprice").value = "";
-    }, function () { flash("No se pudo añadir.", true); });
+    }, function (e) { flash("No se pudo añadir." + ecode(e), true); });
   }
 
   /* ---- data ---- */
@@ -704,7 +749,7 @@ var SEED = [{"code": "8123431259670", "name": "Hinojo Grano", "ar": "بذور ا
     SEED.forEach(function (d, i) {
       upd[d.code] = { code: d.code, name: d.name || "", ar: d.ar || "", price: typeof d.price === "number" ? d.price : null, order: d.order || (i + 1) };
     });
-    col.update(upd).then(function () { flash("Productos cargados ✓"); }, function () { flash("No se pudo cargar. Revisa las reglas.", true); });
+    col.update(upd).then(function () { flash("Productos cargados ✓"); }, function (e) { flash("No se pudo cargar. Revisa las reglas." + ecode(e), true); });
   }
   function fallback(msg) {
     $("list").innerHTML = '<div class="empty">' + (msg || "No se pudieron cargar los productos.") + '</div>';
